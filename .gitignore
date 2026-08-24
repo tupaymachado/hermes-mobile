@@ -30,5 +30,3 @@ ktlint
 hermes-chat-redesign.html
 app-debug-835.apk
 
-# Temp: workflows exigem scope diferente no token
-/.github/workflows/
