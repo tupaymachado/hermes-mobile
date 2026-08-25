@@ -19,6 +19,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +80,7 @@ import com.m57.hermescontrol.HistoryScreen
 import com.m57.hermescontrol.NavigationController
 import com.m57.hermescontrol.R
 import com.m57.hermescontrol.SettingsAbout
+import com.m57.hermescontrol.data.local.AuthManager
 import com.m57.hermescontrol.data.model.Attachment
 import com.m57.hermescontrol.data.model.AttachmentSource
 import com.m57.hermescontrol.data.update.AppUpdateCache
@@ -86,6 +89,8 @@ import com.m57.hermescontrol.data.update.UpdateNoticeManager
 import com.m57.hermescontrol.data.ws.ConnectionStatus
 import com.m57.hermescontrol.data.ws.HermesWsClient
 import com.m57.hermescontrol.theme.LocalHermesStatusColors
+import com.m57.hermescontrol.ui.bots.components.BotAvatar
+import com.m57.hermescontrol.ui.bots.components.BotSwitcherSheet
 import com.m57.hermescontrol.ui.chat.components.ChatConnectionBanner
 import com.m57.hermescontrol.ui.chat.components.ChatInputBar
 import com.m57.hermescontrol.ui.chat.components.ChatLifecycleEffects
@@ -162,6 +167,8 @@ fun ChatScreen(
     val scrollController = rememberChatScrollController(listState, scrollScope)
     var isOlderPagingArmed by remember(state.currentSessionId) { mutableStateOf(false) }
     var showContextSheet by remember { mutableStateOf(false) }
+    // Bot Mode (Fase 3): quick bot switcher anchored to the title chip.
+    var showBotSwitcher by rememberSaveable { mutableStateOf(false) }
     var pendingSavePath by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingSaveName by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingSaveMimeType by rememberSaveable { mutableStateOf<String?>(null) }
@@ -426,14 +433,55 @@ fun ChatScreen(
         pinTopBar = true,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AutoScrollingTitleText(
-                    text = state.chatTitle,
-                    modifier = Modifier.weight(1f),
-                    style =
-                        MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                        ),
-                )
+                // Bot Mode (Fase 3): when a bot is active, the title becomes a
+                // chip that opens the quick switcher — change bots without
+                // leaving the chat. Captured in a plain val first: Kotlin never
+                // smart-casts a DELEGATED property, so isNullOrBlank() alone
+                // would leave String? flowing into String parameters.
+                val activeBotState by AuthManager.activeProfileId.collectAsStateWithLifecycle()
+                val activeBot = activeBotState?.takeIf { it.isNotBlank() }
+                if (activeBot != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .clickable { showBotSwitcher = true }
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        BotAvatar(name = activeBot, size = 24.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // weight(1f) is REQUIRED here: AutoScrollingTitleText
+                        // fillMaxWidth()s its root unconditionally, so without a
+                        // weight it starves the chevron below to zero width.
+                        AutoScrollingTitleText(
+                            text = activeBot,
+                            modifier = Modifier.weight(1f, fill = false),
+                            onClick = { showBotSwitcher = true },
+                            style =
+                                MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Filled.ExpandMore,
+                            contentDescription =
+                                stringResource(R.string.bots_switcher_open),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    AutoScrollingTitleText(
+                        text = state.chatTitle,
+                        modifier = Modifier.weight(1f),
+                        style =
+                            MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
+                    )
+                }
                 // Connection status dot — red when offline, hidden when connected
                 if (!state.isConnected) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -772,6 +820,11 @@ fun ChatScreen(
                     viewModel.relogin(username, password, onResult)
                 },
             )
+        }
+
+        // Bot Mode (Fase 3): quick switcher — change bots without leaving chat.
+        if (showBotSwitcher) {
+            BotSwitcherSheet(onDismiss = { showBotSwitcher = false })
         }
 
         // /update from chat (issue #862): confirm, then the shared progress
