@@ -3,9 +3,10 @@ name: Android CI/CD
 env:
   GRADLE_CACHE_ENCRYPTED_KEY: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
 
+# PR-only (plus manual): validating a branch before it merges is when CI
+# actually changes a decision. Running on BOTH push and pull_request meant
+# every merged PR paid for the same validation twice.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -14,10 +15,9 @@ permissions:
   contents: read
 
 # Cancel in-progress runs when a new commit lands on the same PR branch.
-# On main (push events), each commit gets a unique group so rapid merges
-# don't cancel each other's CI runs.
+# Manual dispatches get a unique group so they never cancel each other.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:

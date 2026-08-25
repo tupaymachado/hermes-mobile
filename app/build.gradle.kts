@@ -33,40 +33,25 @@ android {
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
+    // True only when a real release keystore is supplied through the
+    // environment. This repo ships no keystore and no signing secrets, so the
+    // normal case is false and `assembleRelease` falls back to the debug
+    // signing identity (see buildTypes.release) — that still yields an
+    // installable, minified APK, it just is NOT a distributable release build.
+    val hasReleaseKeystore =
+        listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
+            .all { !System.getenv(it).isNullOrBlank() }
+
     signingConfigs {
         create("release") {
-            val isReleaseBuild =
-                gradle.startParameter.taskNames.any { name ->
-                    name.contains("Release", ignoreCase = true) || name == "build"
-                }
-
-            if (isReleaseBuild) {
-                val storePath = System.getenv("KEYSTORE_PATH")
-                val storePass = System.getenv("KEYSTORE_PASSWORD")
-                val alias = System.getenv("KEY_ALIAS")
-                val keyPass = System.getenv("KEY_PASSWORD")
-
-                if (storePath != null && storePass != null && alias != null && keyPass != null) {
-                    storeFile = file(storePath)
-                    storePassword = storePass
-                    keyAlias = alias
-                    keyPassword = keyPass
-                } else {
-                    // Env vars missing — signing deferred to release workflow.
-                    // Don't hard-require(): that would break compileReleaseKotlin
-                    // in CI where keystore secrets aren't set.
-                    logger.warn("Release signing config missing env vars — signing deferred to release workflow")
-                    storeFile = file("dummy.keystore")
-                    storePassword = "dummy"
-                    keyAlias = "dummy"
-                    keyPassword = "dummy"
-                }
-            } else {
-                // Dummy values for evaluation configuration during non-release builds
-                storeFile = file("dummy.keystore")
-                storePassword = "dummy"
-                keyAlias = "dummy"
-                keyPassword = "dummy"
+            // Only touched when the env actually carries a keystore; otherwise
+            // this config stays unused and release falls back to debug, so
+            // there is no dummy file for Gradle to fail on.
+            if (hasReleaseKeystore) {
+                storeFile = file(System.getenv("KEYSTORE_PATH"))
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
             }
         }
     }
@@ -80,7 +65,16 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs["release"]
+            // Debug-signed when no keystore is configured: an unsigned APK will
+            // not install on a device, and a dummy keystore would just fail the
+            // build. Debug-signed builds are for testing only — they cannot
+            // update an app signed with a different key.
+            signingConfig =
+                if (hasReleaseKeystore) {
+                    signingConfigs["release"]
+                } else {
+                    signingConfigs.getByName("debug")
+                }
             buildConfigField("boolean", "ALLOW_CLEARTEXT", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }

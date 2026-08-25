@@ -1,7 +1,7 @@
 # Bot Mode MVP — Plano de Implementação
 
 > Status: **MVP**, escopo reduzido (sem group chat, sem bot-to-bot messaging, sem routines pane).
-> Validação inicial: 24/ago/2026 contra gateway vivo em `100.101.230.70:9119` (Hermes v0.20.5).
+> Validação inicial: 24/ago/2026 contra um gateway Hermes v0.20.5 vivo na tailnet.
 
 ## TL;DR
 
