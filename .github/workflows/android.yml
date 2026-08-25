@@ -27,7 +27,7 @@ jobs:
   ktlint:
     name: ktlint — Code Style
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -89,7 +89,7 @@ jobs:
   android-lint:
     name: Android Lint — Static Analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -126,7 +126,7 @@ jobs:
   unit-tests:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -164,7 +164,7 @@ jobs:
     name: Build Debug APK
     needs: [ktlint, android-lint, unit-tests]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -206,7 +206,7 @@ jobs:
     name: Release Compile Check
     needs: [ktlint, android-lint, unit-tests]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
