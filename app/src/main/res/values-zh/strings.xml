@@ -66,6 +66,15 @@
     <string name="screen_cron">定时任务</string>
     <string name="screen_system">系统</string>
     <string name="screen_settings">设置</string>
+    <!-- Bot Mode roster (Fase 1) -->
+    <string name="screen_bots">机器人</string>
+    <string name="bots_empty_title">还没有机器人</string>
+    <string name="bots_empty_desc">机器人即你的 Hermes 配置。在“配置”中创建一个即可开始对话。</string>
+    <string name="bots_presence_active">活动中</string>
+    <string name="bots_presence_online">在线</string>
+    <string name="bots_presence_offline">离线</string>
+    <string name="bots_presence_unknown">状态未知</string>
+    <string name="bots_last_message_none">还没有消息</string>
     <string name="screen_profiles">配置</string>
     <string name="screen_webhooks">Webhook</string>
     <string name="screen_gateway">网关</string>

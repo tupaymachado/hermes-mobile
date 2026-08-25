@@ -89,8 +89,8 @@ Pontos da arquitetura que condicionam o plano:
 - `app/src/test/.../data/session/BotChatRegistryTest.kt` — ordem de fallback, pin diferido, invalidação, profile sem sessões.
 - `app/src/test/.../data/remote/ProfileScopeInterceptorTest.kt` — reforçar o caso "param explícito vence" para `/api/sessions`.
 
-### Estimativa
-~0,5 dia · 1 PR (`feat/bot-mode-registry`)
+### Estado
+✅ **Concluída** (`feat/bot-mode-registry`, merged em `main`). `getSessions` ganhou `profile` explícito; `BotChatRegistry` cobre ordem de fallback, pin diferido e invalidação.
 
 ---
 
@@ -119,8 +119,22 @@ Pontos da arquitetura que condicionam o plano:
 - `app/src/test/.../ui/bots/BotsViewModelTest.kt` (MockK, padrão de `ProfilesViewModelTest`).
 - `app/src/androidTest/.../ui/bots/BotsScreenTest.kt` — render do roster + estados vazio/erro.
 
-### Estimativa
-~1,5 dia · 1 PR (`feat/bot-mode-roster`)
+### Estado
+✅ **Concluída** (`feat/bot-mode-roster`).
+
+Desvios face ao plano, todos deliberados:
+- **`getSessionMessages` precisou de `@Query("role")`** — o client não expunha o
+  param que o plano validou no gateway. Adicionado com default `null`; backends
+  legados ignoram-no. Chamado com `order = "latest"` para paginar a partir da
+  mensagem mais recente — sem isso um backend legado devolveria a mais antiga,
+  que é exatamente o que `preview` já contém.
+- **Teste instrumentado é `BotRosterRowTest`, não `BotsScreenTest`** — testa a
+  linha do roster diretamente, sem precisar de encenar o fan-out de rede do
+  ViewModel. O `BotsScreenTest` do plano faz mais sentido na Fase 3, junto com
+  o switcher.
+- **Paleta do avatar tem 4 slots** (pares de container do `colorScheme`), não
+  uma paleta larga: as cores repetem-se a partir do 5º bot de propósito — a cor
+  é auxílio de reconhecimento, o monograma e o nome é que identificam.
 
 > **Nota de escopo:** `ProfilesScreen` **permanece** como ecrã de administração (criar/clonar/soul/model/rename). O `BotsScreen` é a superfície de conversa. Não fundir os dois no MVP.
 >
@@ -207,4 +221,8 @@ Fase 0 (dados)  →  Fase 1 (roster)  →  Fase 2 (canonical)  →  Fase 3 (swit
 
 ## Próximo passo
 
-Começar pela Fase 0 — é o mínimo necessário pra desbloquear tudo depois, e tem o menor risco. Pode ser combinado com Fase 1 num PR só se quiseres um merge inicial maior.
+Fases 0 e 1 estão feitas. Segue a **Fase 2** (canonical bot chat) — a de maior
+risco, por tocar no `ChatViewModel`. O gancho já está preparado dos dois lados:
+o `BotChatRegistry` resolve/adota/invalida, e `BotsViewModel.selectBot()` está
+isolado num único ponto que passa a resolver o alvo antes de chamar o
+`ProfileSwitchCoordinator`.

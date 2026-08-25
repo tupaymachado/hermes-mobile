@@ -79,6 +79,15 @@
     <string name="screen_cron">Cron</string>
     <string name="screen_system">System</string>
     <string name="screen_settings">Settings</string>
+    <!-- Bot Mode roster (Fase 1) -->
+    <string name="screen_bots">Bots</string>
+    <string name="bots_empty_title">No bots yet</string>
+    <string name="bots_empty_desc">Bots are your Hermes profiles. Create one in Profiles to start a conversation.</string>
+    <string name="bots_presence_active">Active</string>
+    <string name="bots_presence_online">Online</string>
+    <string name="bots_presence_offline">Offline</string>
+    <string name="bots_presence_unknown">Status unknown</string>
+    <string name="bots_last_message_none">No messages yet</string>
     <string name="screen_profiles">Profiles</string>
     <string name="screen_webhooks">Webhooks</string>
     <string name="screen_gateway">Gateway</string>

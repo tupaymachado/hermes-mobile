@@ -196,6 +196,11 @@ interface HermesApiService {
         // legacy backends that don't know the param — they ignore it.
         @Query("order") order: String? = null,
         @Query("include_compacted") includeCompacted: Boolean? = true,
+        // Bot Mode roster: `role=user` narrows the page to user turns so
+        // `limit=1&order=latest` yields the bot's last user message. Legacy
+        // backends that don't know the param ignore it (the caller then just
+        // gets the newest message of any role), so it degrades, never breaks.
+        @Query("role") role: String? = null,
     ): Response<SessionMessagesResponse>
 
     @GET("api/sessions/stats")
