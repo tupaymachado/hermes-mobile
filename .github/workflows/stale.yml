@@ -1,9 +1,8 @@
 name: Stale Bot
 
 on:
-  schedule:
-    # Daily at 06:17 UTC (odd minute to avoid the :00 cron stampede).
-    - cron: "17 6 * * *"
+  # Daily schedule disabled: single-dev fork has nothing to go stale.
+  # workflow_dispatch keeps it runnable by hand if that ever changes.
   workflow_dispatch:
 
 permissions:
