@@ -75,6 +75,8 @@
     <string name="bots_presence_offline">离线</string>
     <string name="bots_presence_unknown">状态未知</string>
     <string name="bots_last_message_none">还没有消息</string>
+    <string name="bots_switcher_open">切换机器人</string>
+    <string name="bots_switcher_view_all">查看所有机器人</string>
     <string name="screen_profiles">配置</string>
     <string name="screen_webhooks">Webhook</string>
     <string name="screen_gateway">网关</string>

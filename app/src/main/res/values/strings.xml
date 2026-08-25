@@ -88,6 +88,8 @@
     <string name="bots_presence_offline">Offline</string>
     <string name="bots_presence_unknown">Status unknown</string>
     <string name="bots_last_message_none">No messages yet</string>
+    <string name="bots_switcher_open">Switch bot</string>
+    <string name="bots_switcher_view_all">View all bots</string>
     <string name="screen_profiles">Profiles</string>
     <string name="screen_webhooks">Webhooks</string>
     <string name="screen_gateway">Gateway</string>
