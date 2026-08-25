@@ -80,6 +80,26 @@ class ProfileScopeInterceptorTest {
     }
 
     @Test
+    fun explicitProfileParam_winsOnSessions() {
+        // Bot Mode (Fase 0) reads OTHER bots' sessions without switching the
+        // active profile: `getSessions(profile = "other")` must survive the
+        // interceptor untouched, with exactly ONE profile param on the wire.
+        AuthManager.setActiveProfileId("work")
+        val client = OkHttpClient.Builder().addInterceptor(ProfileScopeInterceptor).build()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        val req =
+            Request
+                .Builder()
+                .url(server.url("api/sessions?limit=50&order=recent&profile=other"))
+                .build()
+        client.newCall(req).execute().close()
+        val url = server.takeRequest().requestUrl!!
+        assertEquals("other", url.queryParameter("profile"))
+        assertEquals(listOf("other"), url.queryParameterValues("profile"))
+        assertEquals("/api/sessions", url.encodedPath)
+    }
+
+    @Test
     fun nonScopedEndpoint_untouched() {
         // Pairing is machine-global (not profile-scoped on the backend).
         AuthManager.setActiveProfileId("work")

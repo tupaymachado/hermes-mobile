@@ -32,4 +32,9 @@ data class ServerStoreState(
     // a dismissed chat banner can return on a later launch without re-pinging
     // GitHub (the once-per-version guard skips the check by then).
     val lastKnownLatestTag: String? = null,
+    // Bot Mode: canonical chat session per SERVER-side Hermes profile
+    // (key = profile name, value = session id). Entering a bot reopens this
+    // thread instead of creating a new one. Optional with a default, so older
+    // stores deserialize unchanged (ignoreUnknownKeys, no migration needed).
+    val botChatSessions: Map<String, String> = emptyMap(),
 )

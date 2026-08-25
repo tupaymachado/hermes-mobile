@@ -171,6 +171,11 @@ interface HermesApiService {
         @Query("limit") limit: Int = 20,
         @Query("offset") offset: Int = 0,
         @Query("order") order: String = "recent",
+        // Explicit profile scope for cross-profile reads (bot roster / canonical
+        // bot chat lookup): ProfileScopeInterceptor leaves an explicit
+        // `profile=` untouched, so this reads another bot WITHOUT switching the
+        // active profile. Omitted (null) = interceptor injects the active one.
+        @Query("profile") profile: String? = null,
     ): Response<SessionListResponse>
 
     @GET("api/sessions/search")
