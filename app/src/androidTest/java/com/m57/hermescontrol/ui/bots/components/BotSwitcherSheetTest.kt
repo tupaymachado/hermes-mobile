@@ -1,7 +1,8 @@
 package com.m57.hermescontrol.ui.bots.components
 
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -9,6 +10,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.MediumTest
 import com.m57.hermescontrol.R
 import com.m57.hermescontrol.theme.HermesControlTheme
+import com.m57.hermescontrol.ui.bots.BotPresence
+import com.m57.hermescontrol.ui.bots.BotRosterItem
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,53 +20,97 @@ import org.junit.runner.RunWith
 /**
  * Instrumented tests for the Fase 3 quick switcher.
  *
- * The sheet's network fan-out lives in `BotsViewModel` (already unit-tested);
- * here we cover what a ViewModel test cannot: the sheet RENDERS the roster and
- * its affordances, and tapping "view all" fires the callback that hands
- * navigation to the caller (the real navigation is a side effect of
- * [com.m57.hermescontrol.NavigationController], out of scope for a compose
- * rule without the app nav host).
+ * Tests the STATELESS content path of the sheet (real [BotSwitcherSheet] with
+ * a pre-seeded VM state is not reachable without mocking the Activity-scoped
+ * store), so the assertions cover rendering + callbacks — the ViewModel's
+ * network fan-out is unit-tested elsewhere.
+ *
+ * Uses createAndroidComposeRule because createComposeRule()'s
+ * ComposeContentTestRule does NOT expose `.activity` for string resources.
  */
 @RunWith(AndroidJUnit4::class)
 @MediumTest
 class BotSwitcherSheetTest {
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
-    private fun setSheet(onViewAll: () -> Unit = {}) {
+    private val bots =
+        listOf(
+            BotRosterItem(
+                name = "research",
+                presence = BotPresence.ONLINE,
+                lastMessage = "what is the deploy status?",
+            ),
+            BotRosterItem(
+                name = "coder",
+                presence = BotPresence.OFFLINE,
+            ),
+        )
+
+    /** Render the sheet content with a controlled state and captured callbacks. */
+    private fun setContent(
+        bots: List<BotRosterItem> = this.bots,
+        isLoading: Boolean = false,
+        errorMessage: String? = null,
+        onSelect: (String) -> Unit = {},
+        onViewAll: () -> Unit = {},
+    ) {
         composeTestRule.setContent {
             HermesControlTheme(useDynamicColors = false) {
-                BotSwitcherSheet(onDismiss = {}, onViewAll = onViewAll)
+                BotSwitcherSheetContent(
+                    bots = bots,
+                    isLoading = isLoading,
+                    errorMessage = errorMessage,
+                    onSelectBot = onSelect,
+                    onViewAll = onViewAll,
+                )
             }
         }
     }
 
     @Test
-    fun sheet_showsTitleAndViewAllAction() {
-        setSheet()
+    fun content_showsBotsAndFooter() {
+        setContent()
 
-        val title = composeTestRule.activity.getString(R.string.screen_bots)
+        composeTestRule.onNodeWithText("research").assertIsDisplayed()
+        composeTestRule.onNodeWithText("what is the deploy status?").assertIsDisplayed()
+        composeTestRule.onNodeWithText("coder").assertIsDisplayed()
         val viewAll = composeTestRule.activity.getString(R.string.bots_switcher_view_all)
-        composeTestRule.onNodeWithText(title).assertIsDisplayed()
         composeTestRule.onNodeWithText(viewAll).assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingABot_firesSelectWithItsName() {
+        var selected: String? = null
+        setContent(onSelect = { selected = it })
+
+        composeTestRule.onNodeWithText("research").performClick()
+
+        assertTrue("selectBot was not called with the tapped bot", selected == "research")
     }
 
     @Test
     fun viewAll_firesCallback() {
         var clicked = false
-        setSheet(onViewAll = { clicked = true })
+        setContent(onViewAll = { clicked = true })
 
         val viewAll = composeTestRule.activity.getString(R.string.bots_switcher_view_all)
         composeTestRule.onNodeWithText(viewAll).performClick()
-        composeTestRule.waitForIdle()
 
-        assert(clicked) { "View-all action did not fire" }
+        assertTrue("view-all did not fire", clicked)
     }
 
     @Test
-    fun chip_contentDescription_isSet() {
-        // The title-chip affordance in ChatScreen exposes an a11y description;
-        // assert the resource exists and resolves (guards the i18n contract).
+    fun errorState_showsMessageAndRendersRetry() {
+        setContent(errorMessage = "boom", bots = emptyList())
+
+        composeTestRule.onNodeWithText("boom").assertIsDisplayed()
+    }
+
+    @Test
+    fun chipAffordance_a11yResourceResolves() {
+        // The chevron's contentDescription comes from strings.xml; assert the
+        // resource resolves in every locale the app ships.
         val desc = composeTestRule.activity.getString(R.string.bots_switcher_open)
         composeTestRule.setContent {
             HermesControlTheme(useDynamicColors = false) {

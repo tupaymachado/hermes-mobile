@@ -435,10 +435,12 @@ fun ChatScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Bot Mode (Fase 3): when a bot is active, the title becomes a
                 // chip that opens the quick switcher — change bots without
-                // leaving the chat. A null/blank active profile (plain gateway,
-                // no bot context) keeps the plain scrolling title.
-                val activeBot by AuthManager.activeProfileId.collectAsStateWithLifecycle()
-                if (!activeBot.isNullOrBlank()) {
+                // leaving the chat. Captured in a plain val first: Kotlin never
+                // smart-casts a DELEGATED property, so isNullOrBlank() alone
+                // would leave String? flowing into String parameters.
+                val activeBotState by AuthManager.activeProfileId.collectAsStateWithLifecycle()
+                val activeBot = activeBotState?.takeIf { it.isNotBlank() }
+                if (activeBot != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier =
@@ -450,8 +452,13 @@ fun ChatScreen(
                     ) {
                         BotAvatar(name = activeBot, size = 24.dp)
                         Spacer(modifier = Modifier.width(8.dp))
+                        // weight(1f) is REQUIRED here: AutoScrollingTitleText
+                        // fillMaxWidth()s its root unconditionally, so without a
+                        // weight it starves the chevron below to zero width.
                         AutoScrollingTitleText(
                             text = activeBot,
+                            modifier = Modifier.weight(1f, fill = false),
+                            onClick = { showBotSwitcher = true },
                             style =
                                 MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
