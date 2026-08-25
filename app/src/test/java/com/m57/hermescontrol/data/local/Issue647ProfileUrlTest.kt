@@ -168,7 +168,7 @@ class Issue647ProfileUrlTest {
         assertEquals(loginUrl, default.resolveBaseUrl(null))
         assertEquals(loginUrl, AuthManager.getBaseUrl())
         assertEquals(loginUrl, AuthManager.serverStore.getLatestState().resolvedBaseUrl)
-        assertNotEquals(loopback, AuthManager.getBaseUrl())
+        assertNotEquals(seededDefault, AuthManager.getBaseUrl())
     }
 
     @Test

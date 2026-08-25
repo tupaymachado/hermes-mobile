@@ -1,6 +1,8 @@
 package com.m57.hermescontrol.ui.bots.components
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -115,7 +117,7 @@ class BotSwitcherSheetTest {
         composeTestRule.setContent {
             HermesControlTheme(useDynamicColors = false) {
                 androidx.compose.material3.Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Filled.ExpandMore,
+                    imageVector = Icons.Filled.ExpandMore,
                     contentDescription = desc,
                 )
             }
