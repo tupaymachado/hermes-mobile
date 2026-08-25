@@ -78,7 +78,12 @@ class ServerEndpoint private constructor(
             baseUrl.port == other.port
 
     companion object {
-        const val DEFAULT_BASE_URL = "https://127.0.0.1:9119/"
+        // Tupay's gateway (Oracle A1 over Tailscale). The tunnel encrypts
+        // transport, so cleartext HTTP inside it is fine — the login screen
+        // shows its standard warning, which is acceptable here. Loopback
+        // (127.0.0.1:9119) only applies to an on-device gateway, which is not
+        // how this build is used.
+        const val DEFAULT_BASE_URL = "http://100.101.230.70:9119/"
         const val CLEARTEXT_WARNING =
             "Cleartext HTTP exposes credentials and messages. " +
                 "Use HTTPS unless this is a trusted development network."

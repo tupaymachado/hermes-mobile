@@ -213,6 +213,9 @@ Desvios face ao plano, todos deliberados:
 - i18n completa (`values-ko`, `values-zh`).
 - `./ktlint --format` em todos os ficheiros novos.
 
+### Extras fora do plano original (feitos sob demanda)
+- **Login pré-populado com o gateway do Tupay**: `ServerEndpoint.DEFAULT_BASE_URL = http://100.101.230.70:9119/` (Tailscale, HTTP puro dentro do túnel — o warning de cleartext da tela é aceitável) + placeholder no campo URL. O default upstream (`https://127.0.0.1:9119/`) só faz sentido pra gateway on-device.
+
 ### Estimativa
 ~1 dia · 1 PR (`chore/bot-mode-polish`)
 

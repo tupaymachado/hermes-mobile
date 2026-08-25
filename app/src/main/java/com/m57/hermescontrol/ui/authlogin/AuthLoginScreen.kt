@@ -159,6 +159,7 @@ fun AuthLoginScreen(
                 value = state.baseUrl,
                 onValueChange = viewModel::onBaseUrlChange,
                 label = { Text(stringResource(R.string.auth_login_base_url_label)) },
+                placeholder = { Text("http://100.101.230.70:9119") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
