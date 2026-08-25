@@ -1,5 +1,7 @@
 package com.m57.hermescontrol.ui.bots
 
+import com.m57.hermescontrol.ChatScreen
+import com.m57.hermescontrol.NavigationController
 import com.m57.hermescontrol.data.local.AuthManager
 import com.m57.hermescontrol.data.model.ActiveProfileResponse
 import com.m57.hermescontrol.data.model.ProfileInfo
@@ -12,6 +14,7 @@ import com.m57.hermescontrol.data.remote.ApiClient
 import com.m57.hermescontrol.data.remote.HermesApiService
 import com.m57.hermescontrol.data.remote.NetworkError
 import com.m57.hermescontrol.data.remote.NetworkResult
+import com.m57.hermescontrol.data.session.BotChatRegistry
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.HermesWsClient
 import io.mockk.coEvery
@@ -20,6 +23,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -69,7 +73,15 @@ class BotsViewModelTest {
         every { HermesWsClient.connect() } returns Unit
 
         mockkObject(ProfileSwitchCoordinator)
-        coEvery { ProfileSwitchCoordinator.switchProfile(any()) } returns NetworkResult.Success(Unit)
+        coEvery { ProfileSwitchCoordinator.switchProfile(any(), any(), any()) } returns NetworkResult.Success(Unit)
+
+        // Fase 2: selecting a bot resolves its canonical chat first. Default to
+        // "no canonical chat yet" — the tests that care override it.
+        mockkObject(BotChatRegistry)
+        coEvery { BotChatRegistry.resolveCanonicalSessionId(any()) } returns null
+
+        mockkObject(NavigationController)
+        every { NavigationController.navigateTo(any()) } returns Unit
 
         mockkObject(ApiClient)
         mockApi = mockk(relaxed = true)
@@ -188,7 +200,7 @@ class BotsViewModelTest {
         // flipping the active profile (ProfileScopeInterceptor honours it).
         coVerify { mockApi.getSessions(1, 0, "recent", "default") }
         coVerify { mockApi.getSessions(1, 0, "recent", "research") }
-        coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any()) }
+        coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any(), any(), any()) }
     }
 
     @Test
@@ -331,7 +343,7 @@ class BotsViewModelTest {
 
         // The coordinator is the ONLY legitimate switch path (REST flip →
         // persist → broadcast → socket re-dial).
-        coVerify(exactly = 1) { ProfileSwitchCoordinator.switchProfile("research") }
+        coVerify(exactly = 1) { ProfileSwitchCoordinator.switchProfile("research", null, true) }
         assertTrue(vm.uiState.value.toastMessage!!.contains("research"))
     }
 
@@ -343,14 +355,14 @@ class BotsViewModelTest {
         vm.selectBot("default")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any()) }
+        coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any(), any(), any()) }
         assertNull(vm.uiState.value.toastMessage)
     }
 
     @Test
     fun `a failed switch rolls the optimistic selection back`() {
         stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
-        coEvery { ProfileSwitchCoordinator.switchProfile("research") } returns
+        coEvery { ProfileSwitchCoordinator.switchProfile("research", any(), any()) } returns
             NetworkResult.Failure(NetworkError.Http(500, "boom"))
 
         val vm = loadedViewModel()
@@ -362,5 +374,63 @@ class BotsViewModelTest {
         assertTrue(state.bots.first { it.name == "default" }.isActive)
         assertFalse(state.bots.first { it.name == "research" }.isActive)
         assertTrue(state.toastMessage!!.contains("Failed to switch"))
+    }
+
+    // ── Canonical bot chat (Fase 2) ──────────────────────────────────────
+
+    @Test
+    fun `selecting a bot hands its canonical chat to the coordinator`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+        coEvery { BotChatRegistry.resolveCanonicalSessionId("research") } returns "sess-canon"
+
+        val vm = loadedViewModel()
+        vm.selectBot("research")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Resolved BEFORE the switch: the coordinator hands the target to chat
+        // in the same dispatch as the broadcast, so gateway.ready on the
+        // re-dialed socket already knows which thread to resume.
+        coVerify(exactly = 1) { ProfileSwitchCoordinator.switchProfile("research", "sess-canon", true) }
+        verify { NavigationController.navigateTo(ChatScreen) }
+    }
+
+    @Test
+    fun `a bot with no canonical chat still switches in bot context`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+        coEvery { BotChatRegistry.resolveCanonicalSessionId("research") } returns null
+
+        val vm = loadedViewModel()
+        vm.selectBot("research")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // isBotContext stays true with a null target — that is exactly what
+        // tells chat to ADOPT the session it is about to create.
+        coVerify(exactly = 1) { ProfileSwitchCoordinator.switchProfile("research", null, true) }
+    }
+
+    @Test
+    fun `a registry failure degrades to a fresh chat, never to a blocked switch`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+        coEvery { BotChatRegistry.resolveCanonicalSessionId("research") } throws IllegalStateException("boom")
+
+        val vm = loadedViewModel()
+        vm.selectBot("research")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { ProfileSwitchCoordinator.switchProfile("research", null, true) }
+        assertTrue(vm.uiState.value.toastMessage!!.contains("research"))
+    }
+
+    @Test
+    fun `a failed switch stays on the roster`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+        coEvery { ProfileSwitchCoordinator.switchProfile("research", any(), any()) } returns
+            NetworkResult.Failure(NetworkError.Http(500, "boom"))
+
+        val vm = loadedViewModel()
+        vm.selectBot("research")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        verify(exactly = 0) { NavigationController.navigateTo(any()) }
     }
 }

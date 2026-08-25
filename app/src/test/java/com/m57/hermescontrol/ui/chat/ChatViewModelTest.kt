@@ -15,6 +15,7 @@ import com.m57.hermescontrol.data.remote.GatewayFile
 import com.m57.hermescontrol.data.remote.GatewayFileClient
 import com.m57.hermescontrol.data.remote.GatewayFileResult
 import com.m57.hermescontrol.data.session.ActiveSessionHolder
+import com.m57.hermescontrol.data.session.BotChatRegistry
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.ConnectionStatus
 import com.m57.hermescontrol.data.ws.HermesWsClient
@@ -3682,5 +3683,126 @@ class ChatViewModelTest {
             // …and cleared in all outcomes.
             assertNull(vm.uiState.value.openingAttachmentPath)
             assertTrue(vm.uiState.value.openError.orEmpty().contains("big.pdf"))
+        }
+
+    // ── Bot Mode (Fase 2): canonical bot chat ────────────────────────────────
+
+    /** Arms the coordinator's one-shot handoff, as a bot-roster switch does. */
+    private fun armBotHandoff(
+        profile: String,
+        sessionId: String?,
+    ) {
+        every { ProfileSwitchCoordinator.consumePendingBotSession() } returns
+            ProfileSwitchCoordinator.PendingBotChat(profile, sessionId) andThen null
+    }
+
+    /** Drives switch → socket re-dial → gateway.ready, the real bot-switch sequence. */
+    private suspend fun TestScope.emitBotSwitch(profile: String) {
+        mockSwitchFlow.emit(profile)
+        advanceUntilIdle()
+        mockConnectionStatus.value = ConnectionStatus.DISCONNECTED
+        advanceUntilIdle()
+        mockConnectionStatus.value = ConnectionStatus.CONNECTED
+        mockEventsFlow.emit(WsEvent.GatewayReady(null))
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun botSwitch_withCanonicalChat_resumesItInsteadOfCreatingASession() =
+        runTest {
+            val (viewModel, oldSessionId) = createViewModelWithSession()
+            stubEmptySessionRests("sess-canon")
+            val captured = captureSends()
+            armBotHandoff("meow", "sess-canon")
+
+            emitBotSwitch("meow")
+
+            // The handoff rides the EXISTING initialSessionId hook, so the bot's
+            // thread is resumed — the fresh-session default never fires.
+            assertEquals("sess-canon", viewModel.uiState.value.currentSessionId)
+            assertTrue(viewModel.uiState.value.currentSessionId != oldSessionId)
+            assertTrue(captured.any { it.first == WsMethods.SESSION_RESUME })
+            assertEquals(0, captured.count { it.first == WsMethods.SESSION_CREATE })
+        }
+
+    @Test
+    fun botSwitch_withoutCanonicalChat_adoptsTheCreatedSession() =
+        runTest {
+            mockkObject(BotChatRegistry)
+            every { BotChatRegistry.adopt(any(), any()) } returns Unit
+            createViewModelWithSession()
+            val captured = captureSends()
+            // A bot opened for the FIRST time: no canonical chat to resume yet.
+            armBotHandoff("meow", null)
+
+            emitBotSwitch("meow")
+            val createId = captured.last { it.first == WsMethods.SESSION_CREATE }.second
+            mockEventsFlow.emit(
+                WsEvent.RpcResult(
+                    createId,
+                    mapOf("session_id" to "runtime-meow", "stored_session_id" to "session-meow"),
+                ),
+            )
+            advanceUntilIdle()
+
+            // Adoption uses the STORAGE key (what a later resume/pin needs),
+            // never the runtime registry id.
+            verify { BotChatRegistry.adopt("meow", "session-meow") }
+        }
+
+    @Test
+    fun plainProfileSwitch_neverClaimsTheCreatedSessionAsABotChat() =
+        runTest {
+            mockkObject(BotChatRegistry)
+            every { BotChatRegistry.adopt(any(), any()) } returns Unit
+            createViewModelWithSession()
+            val captured = captureSends()
+            // No handoff armed — a switch from the Profiles screen.
+
+            emitBotSwitch("meow")
+            val createId = captured.last { it.first == WsMethods.SESSION_CREATE }.second
+            mockEventsFlow.emit(WsEvent.RpcResult(createId, mapOf("session_id" to "session-plain")))
+            advanceUntilIdle()
+
+            verify(exactly = 0) { BotChatRegistry.adopt(any(), any()) }
+        }
+
+    @Test
+    fun messageStart_flushesTheDeferredCanonicalChatPin() =
+        runTest {
+            mockkObject(BotChatRegistry)
+            coEvery { BotChatRegistry.flushPendingPin(any()) } returns Unit
+            val (_, sessionId) = createViewModelWithSession()
+
+            // The server accepted a prompt → the row now exists, which is the
+            // earliest moment PATCH {pinned:true} can succeed.
+            mockEventsFlow.emit(WsEvent.MessageStart(sessionId))
+            advanceUntilIdle()
+
+            coVerify { BotChatRegistry.flushPendingPin(sessionId) }
+        }
+
+    @Test
+    fun goneSession_invalidatesTheCanonicalChatBeforeRecreating() =
+        runTest {
+            mockkObject(BotChatRegistry)
+            every { BotChatRegistry.invalidate(any(), any()) } returns Unit
+            every { AuthManager.activeProfileId } returns MutableStateFlow("meow")
+            stubSession456Rests(success = true)
+            val (viewModel, _) = createViewModelWithSession()
+            val captured = captureSends()
+
+            viewModel.switchSession("session-456")
+            advanceUntilIdle()
+            val resumeId = captured.last { it.first == WsMethods.SESSION_RESUME }.second
+            mockEventsFlow.emit(
+                WsEvent.RpcError(resumeId, JsonRpcError(code = 4007, message = "session not found")),
+            )
+            advanceUntilIdle()
+
+            // The map must not keep handing out a session the gateway forgot;
+            // the recovery create then becomes the bot's next canonical chat.
+            verify { BotChatRegistry.invalidate("meow", "session-456") }
+            assertTrue(captured.any { it.first == WsMethods.SESSION_CREATE })
         }
 }
