@@ -655,4 +655,39 @@ object AuthManager {
     fun setLastKnownLatestTag(tag: String) {
         serverStore.update { it.copy(lastKnownLatestTag = tag) }
     }
+
+    // ── Bot Mode: canonical chat session per server-side profile ─────────
+
+    /**
+     * The canonical Bot Mode chat session for [profile] (a SERVER-side Hermes
+     * profile name, i.e. [activeProfileId] — NOT a local connection profile),
+     * or null when this bot has no adopted thread yet.
+     */
+    fun getBotChatSessionId(profile: String): String? =
+        serverStore
+            .getLatestState()
+            .botChatSessions[profile]
+            ?.takeIf { it.isNotBlank() }
+
+    /** Adopts [sessionId] as the canonical chat session for [profile]. */
+    fun setBotChatSessionId(
+        profile: String,
+        sessionId: String,
+    ) {
+        if (profile.isBlank() || sessionId.isBlank()) return
+        serverStore.update { state ->
+            state.copy(botChatSessions = state.botChatSessions + (profile to sessionId))
+        }
+    }
+
+    /** Forgets the canonical chat session of [profile] (self-heal on a dead session). */
+    fun clearBotChatSession(profile: String) {
+        serverStore.update { state ->
+            if (!state.botChatSessions.containsKey(profile)) {
+                state
+            } else {
+                state.copy(botChatSessions = state.botChatSessions - profile)
+            }
+        }
+    }
 }
