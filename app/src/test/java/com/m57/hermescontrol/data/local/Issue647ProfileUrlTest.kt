@@ -8,6 +8,7 @@ import com.m57.hermescontrol.data.config.ConnectionProfile
 import com.m57.hermescontrol.data.config.ServerStoreState
 import com.m57.hermescontrol.data.config.resolveBaseUrl
 import com.m57.hermescontrol.data.config.resolvedBaseUrl
+import com.m57.hermescontrol.data.remote.ServerEndpoint
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -140,16 +141,20 @@ class Issue647ProfileUrlTest {
         // top-level base URL, and the store-level display must all reflect the
         // login URL — never the hardcoded 127.0.0.1:9119 (issue #647).
         val loginUrl = "http://192.168.1.57:9119/"
-        val loopback = "https://127.0.0.1:9119/"
+        // The fork's seed default is the Tailscale gateway (see
+        // ServerEndpoint.DEFAULT_BASE_URL); the issue #647 contract under test
+        // is "a real login URL must win over the seeded default", whatever
+        // that default is.
+        val seededDefault = ServerEndpoint.DEFAULT_BASE_URL
 
-        // Seed the Default profile the way the app does (host/port -> loopback).
+        // Seed the Default profile the way the app does (host/port -> default).
         AuthManager.ensureDefaultProfile()
-        // Confirm the initial seed really is the loopback default.
+        // Confirm the initial seed really is the documented default.
         val seeded =
             AuthManager.getConnectionProfiles().first {
                 it.id == AuthManager.DEFAULT_PROFILE_ID
             }
-        assertEquals(loopback, seeded.resolveBaseUrl(null))
+        assertEquals(seededDefault, seeded.resolveBaseUrl(null))
 
         // Replicate AuthLoginViewModel.connect(): select -> setBaseUrl(login) -> token.
         AuthManager.setSelectedProfileId(AuthManager.DEFAULT_PROFILE_ID)

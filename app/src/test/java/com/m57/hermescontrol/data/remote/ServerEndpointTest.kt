@@ -149,8 +149,11 @@ class ServerEndpointTest {
     }
 
     @Test
-    fun `DEFAULT_BASE_URL is https localhost 9119`() {
-        assertEquals("https://127.0.0.1:9119/", ServerEndpoint.DEFAULT_BASE_URL)
+    fun `DEFAULT_BASE_URL is the Tupay Tailscale gateway`() {
+        // Fork-specific default: this build targets a REMOTE gateway over
+        // Tailscale (HTTP inside the encrypted tunnel), not an on-device
+        // loopback one — see ServerEndpoint.DEFAULT_BASE_URL's comment.
+        assertEquals("http://100.101.230.70:9119/", ServerEndpoint.DEFAULT_BASE_URL)
     }
 
     private inline fun <reified T : Throwable> assertThrows(block: () -> Unit) {
