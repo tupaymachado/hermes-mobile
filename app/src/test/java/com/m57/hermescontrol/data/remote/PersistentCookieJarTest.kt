@@ -295,7 +295,7 @@ class PersistentCookieJarTest {
 
             // Must block on the latch until we release the barrier below.
             val loaded = async(Dispatchers.IO) { jar.loadForRequest("http://dash.local/api/status".toHttpUrl()) }
-            assertFalse(loaded.isCompleted, "loadForRequest should be waiting on the in-flight hydration")
+            assertFalse("loadForRequest should be waiting on the in-flight hydration", loaded.isCompleted)
 
             releaseHydration.complete(Unit)
             assertEquals(1, loaded.await().size)
