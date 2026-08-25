@@ -21,6 +21,7 @@ import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.OkHttpProvider
 import com.m57.hermescontrol.data.remote.safeApiCall
 import com.m57.hermescontrol.data.session.ActiveSessionHolder
+import com.m57.hermescontrol.data.session.BotChatRegistry
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.CommandBlocklist
 import com.m57.hermescontrol.data.ws.CommandCatalog
@@ -571,6 +572,14 @@ class ChatViewModel(
      */
     var initialSessionId: String? = null
 
+    /**
+     * Bot Mode (Fase 2): the bot whose canonical chat is about to be CREATED.
+     * Armed by the profile-switch collector only when the roster handed over a
+     * bot that has no canonical chat yet, and cleared when the create lands —
+     * so a plain "New chat" tap never claims a session as a bot's thread.
+     */
+    private var pendingBotChatAdoption: String? = null
+
     init {
         refreshSettings()
         refreshMaxToolCallsPerTurn()
@@ -617,6 +626,23 @@ class ChatViewModel(
             ProfileSwitchCoordinator.switched
                 .collect { _ ->
                     resetSessionState(sessionId = null, title = "Hermes", isLoading = true)
+                    // Bot Mode (Fase 2): a switch that came from the bot roster
+                    // carries the bot's canonical chat. Handing it to the
+                    // EXISTING initialSessionId hook is the whole change —
+                    // handleGatewayReady already resumes that id instead of
+                    // creating a fresh session, so there is no second resume
+                    // path to keep in sync. A plain profile flip consumes
+                    // nothing and must leave initialSessionId alone (a pending
+                    // notification target still owns it).
+                    val pendingBot = ProfileSwitchCoordinator.consumePendingBotSession()
+                    // Armed only for a bot with no canonical chat yet: the
+                    // session handleGatewayReady creates becomes its thread.
+                    // Re-evaluated on EVERY switch, so an adoption whose create
+                    // never landed cannot follow the user to another profile.
+                    pendingBotChatAdoption = pendingBot?.profile?.takeIf { pendingBot.sessionId == null }
+                    if (pendingBot != null) {
+                        initialSessionId = pendingBot.sessionId
+                    }
                 }
         }
         // Same wipe when the CONNECTION profile changes (different server):
@@ -879,6 +905,7 @@ class ChatViewModel(
                 // now exists (created lazily at prompt.submit), so a reconnect
                 // resume will succeed.
                 sessionHasServerPresence = true
+                flushBotChatPin(_uiState.value.currentSessionId)
                 streamingController.beginStreamingMessage()
             }
 
@@ -1018,6 +1045,14 @@ class ChatViewModel(
                 // drawer screens (e.g. Processes, issue #532) can issue
                 // session-scoped RPCs. See ActiveSessionHolder.
                 ActiveSessionHolder.set(runtimeId, storageId)
+                // Bot Mode (Fase 2): this create IS the bot's canonical chat.
+                // The durable server-side marker (pinned=true) is only
+                // SCHEDULED here — the row does not exist until the first
+                // prompt, so the PATCH waits for [flushBotChatPin].
+                pendingBotChatAdoption?.let { profile ->
+                    pendingBotChatAdoption = null
+                    BotChatRegistry.adopt(profile, storageId)
+                }
                 _streamingState.update { StreamingState() }
                 addSystemMessage("Session created", persist = true)
                 loadSessions()
@@ -1078,6 +1113,7 @@ class ChatViewModel(
                     request?.sessionId
                         ?: (resultMap?.get("resumed") as? String)
                         ?: _uiState.value.currentSessionId
+                flushBotChatPin(sessionId)
 
                 // Parse session info from backend — model, provider, reasoning_effort
                 val infoMap = resultMap?.get("info") as? Map<String, Any?>
@@ -1766,6 +1802,19 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Bot Mode (Fase 2): the gateway just CONFIRMED a persisted row for
+     * [sessionId], so a canonical bot chat adopted earlier can finally get its
+     * durable `pinned=true` marker. Fired from the three places
+     * `sessionHasServerPresence` flips to true (resume ok / MessageStart /
+     * REST 200) — any earlier PATCH 404s on a row the backend has not written
+     * yet. A no-op for every session that was never adopted.
+     */
+    private fun flushBotChatPin(sessionId: String?) {
+        if (sessionId.isNullOrBlank()) return
+        viewModelScope.launch { BotChatRegistry.flushPendingPin(sessionId) }
+    }
+
     fun createNewSession(setLoading: Boolean = true) {
         // A fresh create has no persisted row until the first prompt.
         sessionHasServerPresence = false
@@ -2141,6 +2190,7 @@ class ChatViewModel(
                 is NetworkResult.Success -> {
                     // REST 200 — the gateway has the row for this session.
                     sessionHasServerPresence = true
+                    flushBotChatPin(sessionId)
                     val serverOffset = result.data.pagination?.offset ?: result.data.offset ?: requestedOffset
                     val chatMessages =
                         mapServerMessages(
@@ -2375,6 +2425,13 @@ class ChatViewModel(
                 isResumeRetrying = false,
                 resumeError = null,
             )
+        }
+        // Bot Mode (Fase 2) self-heal: if this was a bot's canonical chat,
+        // drop it BEFORE the re-create — otherwise the registry keeps handing
+        // out a session the gateway has already forgotten. A no-op when the
+        // map points elsewhere.
+        AuthManager.activeProfileId.value?.let { profile ->
+            BotChatRegistry.invalidate(profile, sessionId)
         }
         // createNewSession() clears messages immediately — queue the notice
         // until its result lands so the user actually sees it.

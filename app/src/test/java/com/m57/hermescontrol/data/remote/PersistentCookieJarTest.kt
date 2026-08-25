@@ -1,13 +1,16 @@
 package com.m57.hermescontrol.data.remote
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -250,10 +253,18 @@ class PersistentCookieJarTest {
             val fakeStore = FakeEncryptedCookieStore()
             fakeStore.save("cold-server", listOf(sessionCookie("dash.local", "cold-cookie-xyz")))
 
+            // Deterministic barrier instead of a fixed delay(): the hydration
+            // stays IN FLIGHT until this test releases it, guaranteeing the
+            // latch exists when loadForRequest runs — the whole thing under
+            // test is "a call during an ongoing hydration waits for it", and
+            // delay(10) vs delay(50) on real IO was a race that flaked on slow
+            // runners (the coroutine might not have entered ensureLoaded yet,
+            // so no latch existed and nothing was awaited).
+            val releaseHydration = CompletableDeferred<Unit>()
             val store =
                 object : CookieStore by fakeStore {
                     override suspend fun load(serverId: String): List<Cookie> {
-                        delay(50)
+                        releaseHydration.await()
                         return fakeStore.load(serverId)
                     }
                 }
@@ -271,11 +282,24 @@ class PersistentCookieJarTest {
                     jar.useStore("cold-server")
                 }
 
-            delay(10)
+            // Wait (real time, bounded) until ensureLoaded has registered its
+            // latch — i.e. the hydration is genuinely in flight.
+            withContext(Dispatchers.IO) {
+                val deadline = System.currentTimeMillis() + 5_000
+                while (!jar.isHydrationInFlightForTest("cold-server") &&
+                    System.currentTimeMillis() < deadline
+                ) {
+                    Thread.sleep(10)
+                }
+            }
 
-            val loaded = jar.loadForRequest("http://dash.local/api/status".toHttpUrl())
-            assertEquals(1, loaded.size)
-            assertEquals("cold-cookie-xyz", loaded[0].value)
+            // Must block on the latch until we release the barrier below.
+            val loaded = async(Dispatchers.IO) { jar.loadForRequest("http://dash.local/api/status".toHttpUrl()) }
+            assertFalse("loadForRequest should be waiting on the in-flight hydration", loaded.isCompleted)
+
+            releaseHydration.complete(Unit)
+            assertEquals(1, loaded.await().size)
+            assertEquals("cold-cookie-xyz", loaded.await()[0].value)
             job.join()
         }
 }

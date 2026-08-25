@@ -17,11 +17,13 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -56,6 +58,10 @@ class ProfileSwitchCoordinatorTest {
         mockkObject(HermesWsClient)
         every { HermesWsClient.disconnect() } returns Unit
         every { HermesWsClient.connect() } returns Unit
+
+        // The coordinator is an object: a handoff armed by a previous test
+        // would leak into this one. Drain it.
+        ProfileSwitchCoordinator.consumePendingBotSession()
     }
 
     @After
@@ -154,6 +160,110 @@ class ProfileSwitchCoordinatorTest {
             runCurrent()
 
             assertEquals("prof-2", received.tryReceive().getOrNull())
+        }
+
+    // ── Bot Mode (Fase 2): canonical-chat handoff ────────────────────────
+
+    @Test
+    fun `bot switch hands the canonical chat over before the socket re-dials`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+            val order = mutableListOf<String>()
+            every { HermesWsClient.disconnect() } answers { order.add("re-dial") }
+            // Unconfined: the collector runs INSIDE emit(), so what it sees is
+            // exactly what ChatViewModel's collector sees at broadcast time.
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                ProfileSwitchCoordinator.switched.collect {
+                    val pending = ProfileSwitchCoordinator.consumePendingBotSession()
+                    order.add("handoff=${pending?.profile}/${pending?.sessionId}")
+                }
+            }
+            runCurrent()
+
+            ProfileSwitchCoordinator.switchProfile("meow", "sess-canon")
+            runCurrent()
+
+            // Load-bearing: the target is armed BEFORE the broadcast, and the
+            // broadcast lands BEFORE the re-dial — so handleGatewayReady on the
+            // re-dialed socket already knows which thread to resume.
+            assertEquals(listOf("handoff=meow/sess-canon", "re-dial"), order)
+        }
+
+    @Test
+    fun `the bot handoff is consumed exactly once`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+
+            ProfileSwitchCoordinator.switchProfile("meow", "sess-canon")
+
+            assertEquals("sess-canon", ProfileSwitchCoordinator.consumePendingBotSession()?.sessionId)
+            // Single-use: a later reconnect (or a second collector) must not
+            // reopen the same thread on top of whatever the user moved to.
+            assertNull(ProfileSwitchCoordinator.consumePendingBotSession())
+        }
+
+    @Test
+    fun `a bot with no canonical chat still arms the handoff`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+
+            ProfileSwitchCoordinator.switchProfile("meow", targetSessionId = null, isBotContext = true)
+
+            // The chat needs the PROFILE even without a target: the session it
+            // creates is what gets adopted as that bot's canonical chat.
+            val pending = ProfileSwitchCoordinator.consumePendingBotSession()
+            assertEquals("meow", pending?.profile)
+            assertNull(pending?.sessionId)
+        }
+
+    @Test
+    fun `a blank target is normalized to no target`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+
+            ProfileSwitchCoordinator.switchProfile("meow", "   ")
+
+            assertNull(ProfileSwitchCoordinator.consumePendingBotSession()?.sessionId)
+        }
+
+    @Test
+    fun `a plain profile switch arms nothing and clears a stale handoff`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+            // A bot switch whose handoff nobody consumed (chat not listening).
+            ProfileSwitchCoordinator.switchProfile("meow", "sess-canon")
+
+            ProfileSwitchCoordinator.switchProfile("plain")
+
+            // Stale targets must never leak into a switch made from elsewhere
+            // (Profiles screen) — that would reopen a bot thread unasked.
+            assertNull(ProfileSwitchCoordinator.consumePendingBotSession())
+        }
+
+    @Test
+    fun `a failed bot switch arms no handoff`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns errorResponse(500)
+
+            val result = ProfileSwitchCoordinator.switchProfile("meow", "sess-canon")
+
+            assertTrue(result is NetworkResult.Failure)
+            assertNull(ProfileSwitchCoordinator.consumePendingBotSession())
+        }
+
+    @Test
+    fun `the plain switch still works untouched`() =
+        runTest {
+            coEvery { mockApi.setActiveProfile(any()) } returns Response.success(Unit)
+
+            val result = ProfileSwitchCoordinator.switchProfile("meow")
+
+            assertTrue(result is NetworkResult.Success)
+            verify(ordering = Ordering.SEQUENCE) {
+                AuthManager.setActiveProfileId("meow")
+                HermesWsClient.disconnect()
+                HermesWsClient.connect()
+            }
         }
 
     private fun <T> errorResponse(code: Int): Response<T> = Response.error(code, "{}".toResponseBody(null))

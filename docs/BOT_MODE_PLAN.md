@@ -162,6 +162,28 @@ Desvios face ao plano, todos deliberados:
 ### Estimativa
 ~2 dias · 1 PR (`feat/bot-mode-canonical-chat`) — é a fase de maior risco (toca o `ChatViewModel`, 3.352 linhas, com máquina de generations/resume).
 
+### Estado
+✅ **Concluída** (`feat/bot-mode-canonical-chat`). O `ChatViewModel` mudou em
+~50 linhas, todas penduradas em caminhos que já existiam.
+
+Desvios face ao plano, todos deliberados:
+- **O handoff carrega o PROFILE, não só o session id.** `consumePendingBotSession()`
+  devolve `PendingBotChat(profile, sessionId?)`. Sem o nome do bot o caso mais
+  comum de todos — abrir um bot pela primeira vez, quando ainda não há chat
+  canónico — não teria como adotar a sessão criada, e a feature nunca
+  arrancaria.
+- **`switchProfile` ganhou um terceiro parâmetro, `isBotContext`** (default:
+  `targetSessionId != null`). Um alvo nulo vindo do roster é indistinguível de
+  um switch normal vindo do `ProfilesScreen`, e só o primeiro deve adotar a
+  sessão criada. O `ProfilesViewModel` continua a chamar `switchProfile(name)`
+  sem alterações.
+- **Um switch normal LIMPA o handoff** em vez de o ignorar: um alvo armado que
+  ninguém consumiu não pode reabrir a thread de um bot num switch feito noutro
+  ecrã.
+- **`recoverGoneSession` só invalida** (não re-arma a adoção). A sessão de
+  recuperação não vira canónica sozinha; o próximo toque no bot resolve `null`,
+  cria e adota. Menos estado, mesmo resultado.
+
 ---
 
 ## Fase 3 — Switch rápido entre bot chats
@@ -221,8 +243,8 @@ Fase 0 (dados)  →  Fase 1 (roster)  →  Fase 2 (canonical)  →  Fase 3 (swit
 
 ## Próximo passo
 
-Fases 0 e 1 estão feitas. Segue a **Fase 2** (canonical bot chat) — a de maior
-risco, por tocar no `ChatViewModel`. O gancho já está preparado dos dois lados:
-o `BotChatRegistry` resolve/adota/invalida, e `BotsViewModel.selectBot()` está
-isolado num único ponto que passa a resolver o alvo antes de chamar o
-`ProfileSwitchCoordinator`.
+Fases 0, 1 e 2 estão feitas: cada bot já tem uma conversa persistente e entrar
+no bot reabre sempre a mesma thread. Segue a **Fase 3** (switch rápido entre bot
+chats), que é puramente de UI — `BotSwitcherSheet` sobre o `BotsViewModel` que
+já existe, aberto pelo título do `ChatScreen`. `selectBot()` já faz tudo o que o
+sheet precisa (resolve canónico → switch → navega para o chat).

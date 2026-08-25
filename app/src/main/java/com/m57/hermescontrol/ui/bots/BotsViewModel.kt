@@ -2,10 +2,13 @@ package com.m57.hermescontrol.ui.bots
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.m57.hermescontrol.ChatScreen
+import com.m57.hermescontrol.NavigationController
 import com.m57.hermescontrol.data.model.ProfileInfo
 import com.m57.hermescontrol.data.remote.ApiClient
 import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.safeApiCall
+import com.m57.hermescontrol.data.session.BotChatRegistry
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.ChangeEvents
 import com.m57.hermescontrol.ui.common.ToastHost
@@ -93,9 +96,15 @@ class BotsViewModel(
     }
 
     /**
-     * Makes [name] the active bot. Fase 1 does the plain profile switch; Fase 2
-     * resolves the bot's canonical chat through `BotChatRegistry` first and
-     * hands it to the coordinator as the target session.
+     * Opens the chat with [name]: resolve the bot's canonical session, switch
+     * the active profile with that session as the target, then land on the
+     * chat screen.
+     *
+     * The target is resolved BEFORE the switch because the coordinator hands it
+     * to `ChatViewModel` in the same dispatch as the switch broadcast — the
+     * chat's `gateway.ready` must already know which thread to resume. A bot
+     * with no canonical chat yet resolves to null and still goes through the
+     * bot path, so the session the chat creates gets adopted as canonical.
      */
     fun selectBot(name: String) {
         val previousActive = _uiState.value.activeBot
@@ -105,9 +114,14 @@ class BotsViewModel(
         _uiState.update { state -> state.copy(activeBot = name, bots = state.bots.withActive(name)) }
 
         viewModelScope.launch {
-            when (val result = ProfileSwitchCoordinator.switchProfile(name)) {
+            // Best-effort: a registry lookup that fails degrades to "no target"
+            // (a fresh chat), never to a blocked switch.
+            val target = runCatching { BotChatRegistry.resolveCanonicalSessionId(name) }.getOrNull()
+            val result = ProfileSwitchCoordinator.switchProfile(name, target, isBotContext = true)
+            when (result) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(toastMessage = "Switched to $name") }
+                    NavigationController.navigateTo(ChatScreen)
                     loadRoster()
                 }
 

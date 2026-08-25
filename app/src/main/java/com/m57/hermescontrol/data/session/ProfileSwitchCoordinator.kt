@@ -37,7 +37,48 @@ object ProfileSwitchCoordinator {
     private val _connectionSwitched = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val connectionSwitched: SharedFlow<String> = _connectionSwitched.asSharedFlow()
 
-    suspend fun switchProfile(name: String): NetworkResult<Unit> {
+    /**
+     * Bot Mode (Fase 2) handoff: which conversation the chat should open after
+     * a switch that came from the bot roster.
+     *
+     * @param profile the server-side Hermes profile (the bot) being homed to.
+     * @param sessionId the bot's canonical chat, or null when it has none yet —
+     *   the chat then creates one and adopts it as canonical.
+     */
+    data class PendingBotChat(
+        val profile: String,
+        val sessionId: String?,
+    )
+
+    /**
+     * The pending bot-chat handoff, deliberately kept OUT of the [switched]
+     * payload: that flow already has two independent collectors and widening
+     * its type would churn both for a case neither cares about.
+     *
+     * `@Volatile` because it is written on the switching coroutine and read on
+     * chat's collector, and it is consumed exactly once
+     * ([consumePendingBotSession]) so a reconnect or a later plain profile flip
+     * can never inherit a stale target.
+     */
+    @Volatile
+    private var pendingBotChat: PendingBotChat? = null
+
+    /**
+     * Switches the SERVER-side Hermes profile.
+     *
+     * @param targetSessionId the bot's canonical chat to reopen after the
+     *   switch (Bot Mode); null means "let chat decide" — a fresh session.
+     * @param isBotContext whether the switch came from the bot roster. Defaults
+     *   to "yes, if a target was given"; the roster passes it explicitly for a
+     *   bot that has no canonical chat YET, because that case looks exactly
+     *   like a plain profile flip from here but must end with the created
+     *   session being adopted as canonical.
+     */
+    suspend fun switchProfile(
+        name: String,
+        targetSessionId: String? = null,
+        isBotContext: Boolean = targetSessionId != null,
+    ): NetworkResult<Unit> {
         val result =
             withContext(Dispatchers.IO) {
                 safeApiCall { ApiClient.hermesApi.setActiveProfile(SetActiveProfileRequest(name)) }
@@ -45,6 +86,16 @@ object ProfileSwitchCoordinator {
         if (result !is NetworkResult.Success) return result
 
         AuthManager.setActiveProfileId(name)
+        // Armed BEFORE the broadcast so chat's collector — which consumes it in
+        // the same dispatch as the wipe — already has the target by the time
+        // the re-dialed socket delivers gateway.ready. A non-bot switch CLEARS
+        // it: an arm that was never consumed must not leak into a plain flip.
+        pendingBotChat =
+            if (isBotContext) {
+                PendingBotChat(profile = name, sessionId = targetSessionId?.takeIf { it.isNotBlank() })
+            } else {
+                null
+            }
         _switched.emit(name)
         // The ticket mint inside connect() does blocking network I/O — it must
         // run off the main thread or the dial crashes with
@@ -55,6 +106,17 @@ object ProfileSwitchCoordinator {
             HermesWsClient.connect()
         }
         return result
+    }
+
+    /**
+     * Takes the bot-chat handoff armed by the last [switchProfile], or null
+     * when the switch was a plain profile flip. Single-use by contract: every
+     * later call returns null, so a reconnect can never reopen a stale thread.
+     */
+    fun consumePendingBotSession(): PendingBotChat? {
+        val pending = pendingBotChat
+        pendingBotChat = null
+        return pending
     }
 
     /**

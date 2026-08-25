@@ -219,6 +219,15 @@ class PersistentCookieJar(
         storeScope.launch { store.clearAll() }
     }
 
+    /**
+     * Test-only visibility into whether a hydration for [serverId] has
+     * REGISTERED its latch (i.e. entered [ensureLoaded]) but not finished.
+     * Used by PersistentCookieJarTest to deterministically wait for "hydration
+     * in flight" instead of racing a fixed delay against real IO scheduling.
+     */
+    fun isHydrationInFlightForTest(serverId: String): Boolean =
+        loadLatches.containsKey(serverId) && !loadedScopes.contains(serverId)
+
     companion object {
         const val DEFAULT_SERVER_ID = "default"
 
