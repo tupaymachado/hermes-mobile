@@ -156,6 +156,19 @@ class ChatViewModelTest {
         mockkObject(ProfileSwitchCoordinator)
         every { ProfileSwitchCoordinator.switched } returns mockSwitchFlow
         every { ProfileSwitchCoordinator.connectionSwitched } returns MutableSharedFlow<String>()
+        // Bot Mode (Fase 2): the object mock is SPY-semantics — an unstubbed
+        // consumePendingBotSession() would fall through to the REAL singleton
+        // and return a handoff armed by ANOTHER test/class (JUnit method order
+        // is hash-based; adding tests reshuffles it — same order-dependent
+        // flake family as the request() catch-all above). Pin it to null;
+        // tests that need a handoff re-stub it via armBotHandoff().
+        every { ProfileSwitchCoordinator.consumePendingBotSession() } returns null
+        // Same containment for the registry: flushBotChatPin fires on the
+        // presence paths of EVERY resume/session-create, and the real registry
+        // touches AuthManager's DataStore + its process-wide pendingPins set.
+        // Never let a unit test reach that state.
+        mockkObject(BotChatRegistry)
+        coEvery { BotChatRegistry.flushPendingPin(any()) } returns Unit
         every { AuthManager.isTypingEffectEnabled() } returns true
         every { AuthManager.getTypingEffectDelayMs() } returns 30
         every { AuthManager.isAutoReconnect() } returns false
