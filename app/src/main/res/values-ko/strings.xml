@@ -62,6 +62,15 @@
     <string name="screen_cron">크론</string>
     <string name="screen_system">시스템</string>
     <string name="screen_settings">설정</string>
+    <!-- Bot Mode roster (Fase 1) -->
+    <string name="screen_bots">봇</string>
+    <string name="bots_empty_title">아직 봇이 없습니다</string>
+    <string name="bots_empty_desc">봇은 Hermes 프로필입니다. 프로필에서 하나를 만들어 대화를 시작하세요.</string>
+    <string name="bots_presence_active">활성</string>
+    <string name="bots_presence_online">온라인</string>
+    <string name="bots_presence_offline">오프라인</string>
+    <string name="bots_presence_unknown">상태 알 수 없음</string>
+    <string name="bots_last_message_none">아직 메시지가 없습니다</string>
     <string name="screen_profiles">프로필</string>
     <string name="screen_webhooks">웹훅</string>
     <string name="screen_gateway">게이트웨이</string>
