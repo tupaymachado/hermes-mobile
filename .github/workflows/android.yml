@@ -1,8 +1,5 @@
 name: Android CI/CD
 
-env:
-  GRADLE_CACHE_ENCRYPTED_KEY: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
-
 # PR-only (plus manual): validating a branch before it merges is when CI
 # actually changes a decision. Running on BOTH push and pull_request meant
 # every merged PR paid for the same validation twice.
@@ -43,9 +40,6 @@ jobs:
         with:
           validate-wrappers: true
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
-
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
 
       - name: Cache ktlint
         id: cache-ktlint
@@ -106,9 +100,6 @@ jobs:
           validate-wrappers: true
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
-
       - name: Run lintDebug
         run: ./gradlew lintDebug
 
@@ -143,9 +134,6 @@ jobs:
           validate-wrappers: true
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
-
       - name: Run test
         run: ./gradlew test
 
@@ -158,45 +146,6 @@ jobs:
           retention-days: 7
 
   # ─────────────────────────────────────────────────────────────────────
-  # Job 4: Build Debug APK — depends on all three above passing.
-  # ─────────────────────────────────────────────────────────────────────
-  build:
-    name: Build Debug APK
-    needs: [ktlint, android-lint, unit-tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          validate-wrappers: true
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
-
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
-
-      - name: Build assembleDebug
-        run: ./gradlew assembleDebug
-
-      - name: Upload Debug APK Artifact
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: hermescontrol-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
-
-  # ─────────────────────────────────────────────────────────────────────
   # Job 5: Release Compile — verifies release variant compiles.
   # Catches issues like debugImplementation-scoped dependencies that
   # main source code depends on (e.g. okhttp3.logging.HttpLoggingInterceptor).
@@ -204,7 +153,6 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────
   release-compile:
     name: Release Compile Check
-    needs: [ktlint, android-lint, unit-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -222,9 +170,6 @@ jobs:
         with:
           validate-wrappers: true
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
-
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
 
       - name: Compile release Kotlin
         run: ./gradlew compileReleaseKotlin
@@ -254,8 +199,19 @@ jobs:
           validate-wrappers: true
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+      # Build the debug APK before booting the emulator so the artifact is
+      # available independently of test outcome (and avoid a redundant
+      # build job just for assembleDebug + upload).
+      - name: Build assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: hermescontrol-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
 
       # Enable KVM hardware acceleration on the Linux runner
       - name: Enable KVM group permissions
@@ -326,10 +282,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           validate-wrappers: true
-          cache-provider: basic
-
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTED_KEY }}
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -351,7 +304,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────
   ci-summary:
     name: CI Summary
-    needs: [ktlint, android-lint, unit-tests, build, release-compile, codeql]
+    needs: [ktlint, android-lint, unit-tests, instrumented-tests, release-compile, codeql]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     if: always()
@@ -365,13 +318,13 @@ jobs:
           KTLINT_RESULT: ${{ needs.ktlint.result }}
           LINT_RESULT: ${{ needs.android-lint.result }}
           TEST_RESULT: ${{ needs.unit-tests.result }}
-          BUILD_RESULT: ${{ needs.build.result }}
+          INSTRUMENTED_RESULT: ${{ needs.instrumented-tests.result }}
           RELEASE_COMPILE_RESULT: ${{ needs.release-compile.result }}
         run: |
           LABEL="ci-red"
           FAILED=0
           FAILED_JOBS=""
-          for entry in "ktlint:$KTLINT_RESULT" "android-lint:$LINT_RESULT" "unit-tests:$TEST_RESULT" "build:$BUILD_RESULT" "release-compile:$RELEASE_COMPILE_RESULT"; do
+          for entry in "ktlint:$KTLINT_RESULT" "android-lint:$LINT_RESULT" "unit-tests:$TEST_RESULT" "instrumented-tests:$INSTRUMENTED_RESULT" "release-compile:$RELEASE_COMPILE_RESULT"; do
             name="${entry%%:*}"
             result="${entry#*:}"
             echo "::notice::$name = $result"
