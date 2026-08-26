@@ -9,6 +9,7 @@ import com.m57.hermescontrol.data.remote.ApiClient
 import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.safeApiCall
 import com.m57.hermescontrol.data.session.BotChatRegistry
+import com.m57.hermescontrol.data.session.BotDmAttribution
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.ChangeEvents
 import com.m57.hermescontrol.ui.common.ToastHost
@@ -25,11 +26,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 data class BotsUiState(
     val bots: List<BotRosterItem> = emptyList(),
@@ -245,16 +241,28 @@ class BotsViewModel(
                     role = "user",
                 )
             }
-        val lastMessage =
+        // Parse BEFORE squashing: `BotDmAttribution` is line-anchored, and
+        // `oneLine()` would fold a multi-line delivery into text it no longer
+        // recognises. PM1's roster badge is pure derivation over the last
+        // message the fan-out ALREADY fetched — no extra request.
+        val rawLastMessage =
             (messagesResult as? NetworkResult.Success)
                 ?.data
                 ?.messages
                 ?.lastOrNull()
                 ?.content
-                ?.plainText()
+                ?.flatText()
+        val dm = rawLastMessage?.let { BotDmAttribution.parse(it) }
+        val lastMessage =
+            rawLastMessage
+                ?.let { if (dm != null) BotDmAttribution.stripPrefix(it) else it }
+                ?.oneLine()
 
         return base.copy(
             lastMessage = lastMessage?.takeIf { it.isNotBlank() },
+            // Null unless the last message really is a delivery — the row's
+            // badge is the only thing that reads it.
+            lastMessageDmSender = dm?.displayName,
             lastActivityAt = session.started_at,
             // The session itself was readable, so recency survives; only the
             // message text is missing, and only when the call actually failed
@@ -284,20 +292,3 @@ private fun List<BotRosterItem>.withActive(activeName: String?): List<BotRosterI
                 },
         )
     }
-
-/**
- * Flattens a message `content` payload to one line of prose. The gateway stores
- * it as a bare string on some turns and as structured content blocks on others
- * (`[{type:"text", text:"…"}]`), so both shapes have to collapse to something a
- * roster row can show.
- */
-private fun JsonElement.plainText(): String? =
-    when (this) {
-        is JsonPrimitive -> contentOrNull?.takeIf { it.isNotBlank() }
-        is JsonArray -> mapNotNull { it.plainText() }.joinToString(" ").takeIf { it.isNotBlank() }
-        is JsonObject ->
-            listOf("text", "content", "message", "body")
-                .firstNotNullOfOrNull { key -> this[key]?.plainText() }
-    }?.replace(WHITESPACE_RUN, " ")?.trim()?.takeIf { it.isNotEmpty() }
-
-private val WHITESPACE_RUN = Regex("\\s+")

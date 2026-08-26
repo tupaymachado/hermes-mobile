@@ -1202,4 +1202,20 @@
     <!-- system action toast templates -->
     <string name="system_action_started">%1$s started</string>
     <string name="system_action_failed">%1$s failed: %2$s</string>
+    <!-- Bot Mode PM1 — bot-to-bot DMs -->
+    <string name="bot_dm_from">DM from %1$s</string>
+    <string name="bot_dm_handle">@%1$s</string>
+    <string name="bots_dm_badge">DM</string>
+    <string name="bots_dm_badge_desc">Last message is a DM from %1$s</string>
+    <string name="bot_dms_empty_title">No bot DMs yet</string>
+    <string name="bot_dms_empty_desc">When your bots message each other, the threads carrying those messages show up here.</string>
+    <string name="bot_dms_partial">Could not check: %1$s</string>
+    <plurals name="bot_dms_count">
+        <item quantity="one">%1$d DM</item>
+        <item quantity="other">%1$d DMs</item>
+    </plurals>
+    <string name="chat_bot_dm_from">From %1$s</string>
+    <string name="chat_bot_dm_handle">@%1$s</string>
+    <string name="screen_bot_dms">Bot DMs</string>
+    <string name="bot_dms_last_from">from %1$s</string>
 </resources>

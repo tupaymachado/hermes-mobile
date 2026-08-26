@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.m57.hermescontrol.R
+import com.m57.hermescontrol.ui.chat.BotDmAuthorBadge
 import com.m57.hermescontrol.ui.chat.ChatBubble
 import com.m57.hermescontrol.ui.chat.ChatMessage
 import com.m57.hermescontrol.ui.chat.ChatSearchState
@@ -24,6 +25,7 @@ import com.m57.hermescontrol.ui.chat.ChatViewModel
 import com.m57.hermescontrol.ui.chat.ClarifyUi
 import com.m57.hermescontrol.ui.chat.ImageViewerModel
 import com.m57.hermescontrol.ui.chat.ToolCallDivider
+import com.m57.hermescontrol.ui.chat.asBotDm
 import com.m57.hermescontrol.ui.chat.components.ChatScrollController
 import com.m57.hermescontrol.ui.chat.components.ClarifyBubble
 import com.m57.hermescontrol.ui.chat.components.ReasoningCard
@@ -141,9 +143,17 @@ fun FullBleedChatList(
                         val userMessage = turn.message
                         val milestone = toolMilestones[entryIndex]
                         item(key = "user-${userMessage.id}") {
+                            // PM1: bot-to-bot deliveries ride the user role.
+                            // When one is detected the sender becomes a badge
+                            // and the bubble shows the body alone, never the
+                            // raw `Message from 🤖 …:` prefix.
+                            val botDm = remember(userMessage.id, userMessage.content) { userMessage.asBotDm() }
                             Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                                botDm?.let { dm ->
+                                    BotDmAuthorBadge(attribution = dm.attribution, alignEnd = true)
+                                }
                                 renderChatBubble(
-                                    message = userMessage,
+                                    message = botDm?.message ?: userMessage,
                                     searchQuery = if (searchState.isActive) searchState.query else "",
                                     isCurrentMatch =
                                         searchState.currentMatchId != null &&
@@ -196,10 +206,18 @@ fun FullBleedChatList(
                                             proseMessage.id == turnReasoning.message.id
                                     val milestone = toolMilestones[entryIndex]
                                     item(key = "prose-${proseMessage.id}") {
+                                        // PM1: a bot answering another bot can
+                                        // echo the attribution prefix back on
+                                        // the assistant role — same treatment
+                                        // as the user side.
+                                        val botDm =
+                                            remember(proseMessage.id, proseMessage.content) { proseMessage.asBotDm() }
+                                        val renderedProse = botDm?.message ?: proseMessage
                                         Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                                            if (proseMessage.isStreaming && typingEffectEnabled) {
+                                            botDm?.let { dm -> BotDmAuthorBadge(attribution = dm.attribution) }
+                                            if (renderedProse.isStreaming && typingEffectEnabled) {
                                                 StreamingFullBleedWithTypingEffect(
-                                                    streaming = proseMessage,
+                                                    streaming = renderedProse,
                                                     typingDelayMs = typingEffectDelayMs,
                                                     isDark = isDark,
                                                     showTurnHeader = showTurnHeader,
@@ -207,7 +225,7 @@ fun FullBleedChatList(
                                                 )
                                             } else {
                                                 FullBleedAgentMessage(
-                                                    message = proseMessage,
+                                                    message = renderedProse,
                                                     showTurnHeader = showTurnHeader,
                                                     isDarkTheme = isDark,
                                                     // Highlight only bubbles that actually contain a match —

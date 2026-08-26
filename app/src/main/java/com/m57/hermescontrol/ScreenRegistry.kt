@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HistoryEdu
 import androidx.compose.material.icons.filled.Inventory2
@@ -35,6 +36,7 @@ import com.m57.hermescontrol.ui.common.NeurologyIcon
 import com.m57.hermescontrol.ui.achievements.AchievementsScreen as AchievementsScreenContent
 import com.m57.hermescontrol.ui.analytics.AnalyticsScreen as AnalyticsScreenContent
 import com.m57.hermescontrol.ui.billing.BillingScreen as BillingScreenContent
+import com.m57.hermescontrol.ui.bots.BotDmsScreen as BotDmsScreenContent
 import com.m57.hermescontrol.ui.bots.BotsScreen as BotsScreenContent
 import com.m57.hermescontrol.ui.channels.ChannelsScreen as ChannelsScreenContent
 import com.m57.hermescontrol.ui.chat.ChatScreen as ChatScreenContent
@@ -98,6 +100,12 @@ object ScreenRegistry {
                 Icons.Filled.SmartToy,
                 DrawerSection.CONVERSE,
             ) { sessionId, openDrawer -> BotsScreenContent(onOpenDrawer = openDrawer) },
+            ScreenDefinition(
+                BotDmsScreen,
+                R.string.screen_bot_dms,
+                Icons.Filled.Forum,
+                DrawerSection.CONVERSE,
+            ) { sessionId, openDrawer -> BotDmsScreenContent(onOpenDrawer = openDrawer) },
             ScreenDefinition(
                 ProfilesScreen,
                 R.string.screen_profiles,
