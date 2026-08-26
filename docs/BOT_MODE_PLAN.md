@@ -188,6 +188,9 @@ Desvios face ao plano, todos deliberados:
 
 ## Fase 3 — Switch rápido entre bot chats
 
+### Estado
+✅ **Concluída** (`feat/bot-mode-quick-switch`, PR #4). `BotSwitcherSheet` com VM de escopo Activity (deliberado — switch sobrevive ao dismiss), chip clicável no título do chat quando há bot ativo, strings en/ko/zh, 3 testes instrumentados. Desvios: "Ver todos" injetável como callback (testabilidade); review do Opus pegou 3 erros de compilação (smart cast em delegate, colisão BotsScreen composable/NavKey, createComposeRule sem `.activity`) corrigidos antes do merge.
+
 **Objetivo:** trocar de bot sem sair do chat.
 
 ### Criar
@@ -287,8 +290,91 @@ Fase 0 (dados)  →  Fase 1 (roster)  →  Fase 2 (canonical)  →  Fase 3 (swit
 
 ## Próximo passo
 
-Fases 0, 1 e 2 estão feitas: cada bot já tem uma conversa persistente e entrar
-no bot reabre sempre a mesma thread. Segue a **Fase 3** (switch rápido entre bot
-chats), que é puramente de UI — `BotSwitcherSheet` sobre o `BotsViewModel` que
-já existe, aberto pelo título do `ChatScreen`. `selectBot()` já faz tudo o que o
-sheet precisa (resolve canónico → switch → navega para o chat).
+~~Fase 3 (switch rápido).~~ **MVP CONCLUÍDO** — Fases 0-4 todas mergeadas na `main` (ago/2026). Segue a seção **Pós-MVP** abaixo.
+
+---
+
+# PÓS-MVP — Features do Hermes Desktop ainda ausentes no mobile
+
+Fonte: `website/docs/user-guide/bot-mode.md` + `features/*.md` do repositório upstream (52 docs de features no total). Ordenado por custo/benefício pro caso de uso Tupay (1 gateway, 3-6 bots, uso pessoal).
+
+## PM1 — Bot-to-bot DMs legíveis (⭐ recomendado primeiro)
+
+**O que é no Desktop:** bots trocam mensagens entre si com atribuição (`Message from 🤖 researcher (@researcher):`). O gateway injeta o protocolo de messaging no system prompt do canonical Bot Chat (`agent.bot_mode_protocol: true`, default ON) — **os bots já sabem conversar; o mobile só não mostra**.
+
+**Estado atual no mobile:** as mensagens chegam às threads canônicas (Fase 2 garante), mas nada as distingue visualmente nem oferece visão agregada.
+
+**Escopo:**
+- Renderizar mensagens de bot-to-bot na ChatScreen com badge de autor (nome do bot remetente + avatar mini) — o conteúdo já vem no stream; falta parsear o prefixo `Message from 🤖 X (@x):` e estilizar
+- Tela "Conversas entre bots": lista de threads onde há mensagens de bot→bot (query nas sessions por padrão de autor)
+- Badge no roster quando um bot recebeu mensagem de outro bot
+- Composer com @mention básico (autocomplete do roster) pra disparar handoff
+
+**Arquivos prováveis:** `ChatScreen.kt` (render), `ChatViewModel` (parse do prefixo — mínimo), novo `ui/bots/BotDmsScreen.kt`, `BotsViewModel` (badge).
+
+**Estimativa:** ~3-4 dias · 1-2 PRs. Risco baixo — tudo é leitura de estado que já existe.
+
+## PM2 — Routines por bot (pane de cron namespaced)
+
+**O que é no Desktop:** cron jobs namespaced `[bot: <nome>]` vivem no pane do bot responsável ("summarize my inbox every morning" aparece ao lado do bot que faz). Runs caem no chat histórico do próprio bot.
+
+**Estado atual no mobile:** o app já tem tela de cron genérica (lista todos). Falta: filtro/agrupamento por profile e a associação job↔bot.
+
+**Escopo:**
+- Detectar jobs `[bot: nome]` via parsing do campo existente da API de cron
+- Na BotsScreen/sheet: seção "Routines" por bot (lista + toggle pause/resume)
+- Criar routine a partir do bot (pré-preenche o namespace)
+- Runs aparecem no canonical chat do bot (já acontece naturalmente — sessions de cron são profile-scoped)
+
+**Arquivos prováveis:** `ui/cron/*` (filtro), `BotsViewModel`/novo `BotRoutinesViewModel`, `BotsScreen`.
+
+**Estimativa:** ~3-5 dias · 1 PR. Risco baixo-médio (parsing do namespace + UX de criação).
+
+## PM3 — Group chats (2-6 bots)
+
+**O que é no Desktop:** sala compartilhada. Tua mensagem dispara até 3 rodadas seriais; @menções escopam quem responde; bots se puxam com @name e te escalam com @user (badge "needs you"); caps 10 msgs/send e 3 rounds; cada bot mantém sessão própria `Group: <nome>` persistente. Salas são espelhadas nos gateways conectados (sobrevivem a desktop offline).
+
+**Estado atual no mobile:** nada de rooms. A fundação (canonical chats, registry, switcher) cobre os blocos de UI individuais.
+
+**Escopo (fases internas):**
+- a) Modelo de room: sessão `Group: <nome>` por bot + mapeamento room↔membros (generaliza o mapa 1:1 do `BotChatRegistry` para 1:N — já previsto no design)
+- b) UI da sala: mensagens com autor destacado, chips de membros, badge needs-you
+- c) Orquestração de rounds: disparar turnos serialmente nos bots mencionados (ou todos), respeitando caps; o gateway serializa execução, o cliente coordena a sequência
+- d) Criação/gestão de sala (escolher 2-6 membros, nomear, disbandar)
+
+**Arquivos prováveis:** extensão do `BotChatRegistry` (1:N), novo `data/session/GroupRoomCoordinator.kt`, novo `ui/group/GroupRoomScreen.kt` + ViewModel, composer com @autocomplete.
+
+**Estimativa:** ~2-3 semanas · 2-3 PRs. Risco médio-alto — orquestração multi-sessão é território novo no mobile.
+
+## PM4 — @mention autocomplete no composer
+
+**O que é no Desktop:** digitar `@` abre autocomplete validado contra o roster vivo; renomear um bot atualiza a tag; email/`@` desconhecido passa intacto.
+
+**Escopo mobile:** autocomplete sobre o roster (nomes + títulos), inserção de token `@nome`, sem resolução cross-device no primeiro corte.
+
+**Dependência:** faz mais sentido DEPOIS do PM1 (o handoff precisa de destino) ou PM3 (mentions em sala).
+
+**Estimativa:** ~1-2 dias standalone.
+
+## PM5 — Multi-source roster (bots de outros gateways)
+
+Desktop agrega bots de múltiplas conexões (local + SSH + cloud) num roster só, com handles `@name-device` pra desambiguar.
+
+**Relevância pro Tupay:** BAIXA hoje (1 gateway). Relevância futura: se tu espalhar bots entre Oracle A1 e outra máquina. Adiar até haver segundo gateway.
+
+## PM6 — Avatares gerados por IA
+
+Desktop usa `image.generate` RPC pra criar avatares. Backend não expõe campo de avatar no `ProfileInfo`; exigiria mudança server-side OU cache local do blob gerado. Cosmético; adiar.
+
+## Ordem sugerida
+
+```
+PM1 (DMs legíveis)  →  PM2 (Routines)  →  PM4 (@mention)  →  PM3 (Group chat)  →  PM5/PM6
+   ~3-4d                ~3-5d               ~1-2d              ~2-3 sem              adiados
+```
+
+PM4 depende funcionalmente de PM1/PM3 (precisa de contexto onde mencionar); PM3 é o único grande e pode ser fatiado (a→b→c→d como PRs separados).
+
+## Nota de compatibilidade
+
+Todas as features acima são **client-side sobre APIs existentes** — nenhuma exige mudança no gateway Hermes v0.20.x. O protocolo bot-to-bot e as salas espelhadas já são server-side no upstream; o mobile apenas consome. Isso significa: syncs futuros do upstream Hy4ri não conflitam com essas features (código novo em arquivos novos), e o Desktop permanece fonte da verdade pra qualquer estado compartilhado.
