@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -78,6 +79,11 @@ fun BotRosterRow(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    // PM1: the bot's newest traffic came from ANOTHER bot.
+                    // Discreet by design — it rides next to the name instead of
+                    // stealing the last-message line, which still shows what
+                    // was actually said.
+                    bot.lastMessageDmSender?.let { sender -> BotDmChip(sender = sender) }
                 }
                 Text(
                     // Three distinct states, never collapsed into one: a real
@@ -118,6 +124,34 @@ fun BotRosterRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * "DM" pill marking a roster row whose last message is a bot-to-bot delivery.
+ *
+ * The visible label is the bare word — a roster row has no space for a
+ * sentence — while the a11y description carries the SENDER, which is the part
+ * that actually tells the user something ("DM from Hermes"). Same rule as
+ * [PresenceDot]: a two-letter chip announcing itself is a state with no
+ * subject.
+ */
+@Composable
+private fun BotDmChip(sender: String) {
+    val description = stringResource(R.string.bots_dm_badge_desc, sender)
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.extraSmall,
+        modifier = Modifier.semantics { contentDescription = description }.testTag("bot_dm_chip"),
+    ) {
+        Text(
+            text = stringResource(R.string.bots_dm_badge),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+        )
     }
 }
 

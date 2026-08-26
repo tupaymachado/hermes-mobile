@@ -1075,4 +1075,21 @@
     <!-- system action toast templates -->
     <string name="system_action_started">%1$s 已开始</string>
     <string name="system_action_failed">%1$s 失败：%2$s</string>
+    <!-- Bot Mode PM1 — 机器人之间的私信 -->
+    <string name="bot_dm_from">来自 %1$s 的私信</string>
+    <string name="bot_dm_handle">@%1$s</string>
+    <string name="bots_dm_badge">私信</string>
+    <string name="bots_dm_badge_desc">最新消息是来自 %1$s 的私信</string>
+    <string name="bot_dms_empty_title">还没有机器人私信</string>
+    <string name="bot_dms_empty_desc">当你的机器人互相发消息时，承载这些消息的会话会显示在这里。</string>
+    <string name="bot_dms_open_thread">打开 %1$s 的会话</string>
+    <string name="bot_dms_partial">无法检查：%1$s</string>
+    <plurals name="bot_dms_count">
+        <item quantity="other">%1$d 条私信</item>
+    </plurals>
+    <string name="chat_bot_dm_from">来自 %1$s</string>
+    <string name="chat_bot_dm_handle">@%1$s</string>
+    <string name="screen_bot_dms">机器人私信</string>
+    <string name="bot_dms_last_from">来自 %1$s</string>
+    <string name="bot_dms_unscanned">无法扫描：%1$s</string>
 </resources>

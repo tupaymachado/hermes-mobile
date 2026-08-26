@@ -47,4 +47,15 @@ data class BotRosterItem(
      * normal. This flag never blocks selection.
      */
     val lastMessageUnavailable: Boolean = false,
+    /**
+     * PM1: display name of the bot that sent [lastMessage], when that message
+     * is a bot-to-bot DM rather than something the human typed. Null for
+     * ordinary traffic.
+     *
+     * Derived from the last message the roster fan-out ALREADY fetched, so the
+     * badge costs zero extra requests. [lastMessage] then holds the delivered
+     * body with the `Message from 🤖 …:` prefix stripped — the row shows what
+     * was said, the badge shows who said it.
+     */
+    val lastMessageDmSender: String? = null,
 )

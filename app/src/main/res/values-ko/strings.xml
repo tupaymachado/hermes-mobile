@@ -776,4 +776,21 @@
         <item quantity="other">에이전트 %1$d개 실행 중</item>
     </plurals>
     <string name="task_progress_open_details">작업 세부 정보 열기</string>
+    <!-- Bot Mode PM1 — 봇 간 DM -->
+    <string name="bot_dm_from">%1$s\uAC00 보낸 DM</string>
+    <string name="bot_dm_handle">@%1$s</string>
+    <string name="bots_dm_badge">DM</string>
+    <string name="bots_dm_badge_desc">마지막 메시지는 %1$s\uAC00 보낸 DM입니다</string>
+    <string name="bot_dms_empty_title">아직 봇 DM이 없습니다</string>
+    <string name="bot_dms_empty_desc">봇끼리 주고받은 메시지가 있으면 해당 스레드가 여기에 표시됩니다.</string>
+    <string name="bot_dms_open_thread">%1$s\uC758 스레드 열기</string>
+    <string name="bot_dms_partial">확인할 수 없음: %1$s</string>
+    <plurals name="bot_dms_count">
+        <item quantity="other">DM %1$d개</item>
+    </plurals>
+    <string name="chat_bot_dm_from">%1$s에서</string>
+    <string name="chat_bot_dm_handle">@%1$s</string>
+    <string name="screen_bot_dms">봇 DM</string>
+    <string name="bot_dms_last_from">%1$s에서</string>
+    <string name="bot_dms_unscanned">스캔 불가: %1$s</string>
 </resources>
