@@ -30,3 +30,6 @@ ktlint
 hermes-chat-redesign.html
 app-debug-835.apk
 
+
+# ARM host local env (SDK/JDK paths)
+/local-env.sh
