@@ -219,6 +219,47 @@ Desvios face ao plano, todos deliberados:
 ### Estimativa
 ~1 dia · 1 PR (`chore/bot-mode-polish`)
 
+### Estado
+✅ **Concluída** (`chore/bot-mode-polish`). Fecha o MVP.
+
+O que foi feito, e os desvios face ao plano:
+
+- **Presence ao vivo.** `ChangeEvents.GATEWAY = "gateway.changed"` novo, parseado
+  pelo `EventParser` junto dos outros quatro. O `refreshOnChange` ganhou uma
+  sobrecarga que aceita **um conjunto** de tipos: o roster move-se por duas
+  assinaturas (last message ← `sessions.changed`, presence ← `gateway.changed`)
+  e dois coletores independentes teriam dois guards `refreshInFlight`
+  separados — uma rajada nos dois tipos dispararia dois fan-outs concorrentes.
+  Um backend que só emite um dos tipos degrada para esse; um que não emite
+  nenhum fica no chão de sempre (pull-to-refresh + reentrar no ecrã).
+- **Erro por bot ≠ roster partido.** O `BotsViewModel` já degradava por linha,
+  mas a linha degradada era **indistinguível** de um bot sem conversas: ambas
+  acabavam em `lastMessage = null` e mostravam "No messages yet" — ou seja, uma
+  falha de rede era reportada como caixa de entrada vazia. Novo campo
+  `BotRosterItem.lastMessageUnavailable`, com terceiro estado na linha
+  ("Last message unavailable", em `colorScheme.error`). A linha continua
+  selecionável: nada disto bloqueia o switch.
+- **Acessibilidade.** O dot de presence passa a anunciar **sujeito + estado**
+  (`"research: Offline"`, via `bots_presence_desc`) — uma caixa de 8dp a dizer
+  só "Offline" é um estado sem sujeito na árvore de semântica. O `BotAvatar`
+  ganhou `contentDescription` opcional (default `null` = decorativo): nos dois
+  call sites da app o nome do bot é texto adjacente, e descrever o avatar
+  duplicaria o anúncio; o monograma continua a nunca chegar à árvore de a11y
+  ("RB" não é identidade).
+- **i18n.** As 12 chaves `bots_*`/`screen_bots` existem nas três `values` (as
+  duas novas incluídas); verificado por script sobre todos os `R.string.*`
+  alcançáveis a partir das superfícies bots (13 chaves, incluindo as dos
+  `StateViews` partilhados).
+- **Dívidas da Fase 3.** (1) Tocar no bot já ativo era um no-op silencioso — a
+  sheet fechava e não acontecia nada; agora o VM emite um toast
+  "already active" e **não** chama o callback, portanto a sheet fica aberta.
+  (2) A sheet fechava sem animação de saída: `selectBot` ganhou
+  `onSwitched: () -> Unit`, que só corre quando o servidor aceita o flip, e a
+  sheet pendura nele um `sheetState.hide()` + `invokeOnCompletion { … }`. O
+  "Ver todos" também espera a animação — navegar primeiro destrói o ecrã
+  anfitrião e leva a sheet a meio do slide. `onDismissRequest` continua direto:
+  swipe e scrim já chegam com a sheet assente.
+
 ---
 
 ## Ordem de execução e totais

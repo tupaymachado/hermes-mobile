@@ -63,10 +63,14 @@ class BotsViewModel(
     val uiState: StateFlow<BotsUiState> = _uiState.asStateFlow()
 
     init {
-        // Silent backstop: a finished turn anywhere refreshes the last-message
-        // column without a spinner. No-op on backends without change_events.
+        // Silent backstop: a finished turn refreshes the last-message column
+        // and a gateway going up/down refreshes presence, both without a
+        // spinner. One collector for both types, so a burst on the two cannot
+        // fire two concurrent fan-outs. No-op on backends without
+        // change_events, and on backends that only emit one of the two this
+        // degrades to that one — pull-to-refresh stays the floor.
         refreshOnChange(
-            eventType = ChangeEvents.SESSIONS,
+            eventTypes = setOf(ChangeEvents.SESSIONS, ChangeEvents.GATEWAY),
             apiCall = { fetchRoster() },
             onSuccess = { snapshot ->
                 _uiState.update { it.copy(bots = snapshot.bots, activeBot = snapshot.activeBot) }
@@ -105,10 +109,24 @@ class BotsViewModel(
      * chat's `gateway.ready` must already know which thread to resume. A bot
      * with no canonical chat yet resolves to null and still goes through the
      * bot path, so the session the chat creates gets adopted as canonical.
+     *
+     * [onSwitched] runs only once the server has actually accepted the flip.
+     * The switcher sheet hangs its dismissal on it: dismissing on tap would
+     * close the sheet over a switch that may still fail, and the failure toast
+     * would then arrive with nothing on screen to attach it to.
      */
-    fun selectBot(name: String) {
+    fun selectBot(
+        name: String,
+        onSwitched: () -> Unit = {},
+    ) {
         val previousActive = _uiState.value.activeBot
-        if (name == previousActive) return
+        if (name == previousActive) {
+            // Tapping the bot you are already talking to used to be a silent
+            // no-op — from the sheet that read as "it closed and did nothing".
+            // There is nothing to switch, so say that and stay put.
+            _uiState.update { it.copy(toastMessage = "$name is already active") }
+            return
+        }
         // Optimistic — mirrors ProfilesViewModel.selectActiveProfile, and is
         // rolled back below if the server refuses the flip.
         _uiState.update { state -> state.copy(activeBot = name, bots = state.bots.withActive(name)) }
@@ -121,6 +139,7 @@ class BotsViewModel(
             when (result) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(toastMessage = "Switched to $name") }
+                    onSwitched()
                     NavigationController.navigateTo(ChatScreen)
                     loadRoster()
                 }
@@ -207,9 +226,12 @@ class BotsViewModel(
             safeApiCall {
                 ApiClient.hermesApi.getSessions(limit = 1, offset = 0, order = "recent", profile = name)
             }
-        val session =
-            (sessionsResult as? NetworkResult.Success)?.data?.sessions?.firstOrNull()
-                ?: return base
+        // Failure and "no sessions" both land on a null last message, but they
+        // are NOT the same fact: only the first is a degraded row (Fase 4).
+        if (sessionsResult !is NetworkResult.Success) {
+            return base.copy(lastMessageUnavailable = true)
+        }
+        val session = sessionsResult.data.sessions?.firstOrNull() ?: return base
 
         val messagesResult =
             safeApiCall {
@@ -234,6 +256,10 @@ class BotsViewModel(
         return base.copy(
             lastMessage = lastMessage?.takeIf { it.isNotBlank() },
             lastActivityAt = session.started_at,
+            // The session itself was readable, so recency survives; only the
+            // message text is missing, and only when the call actually failed
+            // (a session whose newest user message is empty is not an error).
+            lastMessageUnavailable = messagesResult !is NetworkResult.Success,
         )
     }
 

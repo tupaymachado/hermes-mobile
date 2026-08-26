@@ -71,6 +71,8 @@
     <string name="bots_presence_offline">오프라인</string>
     <string name="bots_presence_unknown">상태 알 수 없음</string>
     <string name="bots_last_message_none">아직 메시지가 없습니다</string>
+    <string name="bots_last_message_unavailable">마지막 메시지를 불러올 수 없음</string>
+    <string name="bots_presence_desc">%1$s: %2$s</string>
     <string name="bots_switcher_open">봇 전환</string>
     <string name="bots_switcher_view_all">모든 봇 보기</string>
     <string name="screen_profiles">프로필</string>

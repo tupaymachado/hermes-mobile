@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,12 +28,20 @@ import androidx.compose.ui.unit.sp
  * satisfies the `checkColorLiterals` build guard). Four slots means colours
  * repeat past four bots — deliberate: the colour is a recognition aid, the
  * monogram and name are what actually identify the row.
+ *
+ * **Accessibility.** [contentDescription] is opt-in and defaults to null,
+ * which marks the avatar as decoration. Both in-app call sites (the roster row
+ * and the chat title chip) render the bot's name as text right next to it, so
+ * a described avatar would make a screen reader say the name twice; the
+ * monogram itself is never announced either, since "RB" is noise, not
+ * identity. Pass a description only where the avatar stands alone.
  */
 @Composable
 fun BotAvatar(
     name: String,
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
+    contentDescription: String? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val palette =
@@ -43,15 +52,21 @@ fun BotAvatar(
             scheme.surfaceVariant to scheme.onSurfaceVariant,
         )
     val (background, foreground) = palette[paletteIndex(name, palette.size)]
+    // Captured under another name: inside the semantics lambda the bare
+    // `contentDescription` resolves to the receiver's write-only property.
+    val description = contentDescription
 
     Box(
         modifier =
             modifier
                 .size(size)
                 .background(color = background, shape = CircleShape)
-                // The monogram is decoration: the row already announces the bot
-                // name, so a screen reader must not read the initials as well.
-                .clearAndSetSemantics {},
+                // clearAndSetSemantics either way: the monogram Text must never
+                // reach the a11y tree on its own — described or not, "RB" is
+                // not what a screen reader should read out.
+                .clearAndSetSemantics {
+                    if (description != null) this.contentDescription = description
+                },
         contentAlignment = Alignment.Center,
     ) {
         Text(
