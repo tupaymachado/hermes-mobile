@@ -85,6 +85,11 @@ class BotRosterRowTest {
         composeTestRule.onNodeWithContentDescription("RB").assertDoesNotExist()
         // The row's real identity IS announced, via the name text.
         composeTestRule.onNodeWithText("research bot").assertExists()
+        // The monogram IS rendered (unmerged tree) — just silenced. Guards the
+        // pair "rendered AND silent": if clearAndSetSemantics ever regresses,
+        // the merged-tree asserts above fail; if rendering regresses, this one
+        // fails.
+        composeTestRule.onNodeWithText("RB", useUnmergedTree = true).assertExists()
     }
 
     @Test
