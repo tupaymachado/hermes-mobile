@@ -55,42 +55,41 @@ fun BotDmsScreen(
         isRefreshing = state.isLoading,
         onRefresh = { viewModel.loadThreads() },
     ) { paddingValues ->
-        when {
-            state.isLoading && state.threads.isEmpty() ->
-                SkeletonListState(modifier = Modifier.padding(paddingValues))
+        Column(modifier = Modifier.fillMaxWidth().padding(paddingValues)) {
+            when {
+                state.isLoading && state.threads.isEmpty() ->
+                    SkeletonListState(modifier = Modifier.padding(paddingValues))
 
-            state.errorMessage != null && state.threads.isEmpty() ->
-                ErrorState(
-                    message = state.errorMessage ?: "",
-                    onRetry = { viewModel.loadThreads() },
-                    modifier = Modifier.padding(paddingValues),
-                )
+                state.errorMessage != null && state.threads.isEmpty() ->
+                    ErrorState(
+                        message = state.errorMessage ?: "",
+                        onRetry = { viewModel.loadThreads() },
+                        modifier = Modifier.padding(paddingValues),
+                    )
 
-            state.threads.isEmpty() ->
-                EmptyState(
-                    title = stringResource(R.string.bot_dms_empty_title),
-                    subtitle = stringResource(R.string.bot_dms_empty_desc),
-                    icon = Icons.Filled.Forum,
-                    modifier = Modifier.padding(paddingValues),
-                )
+                state.threads.isEmpty() ->
+                    EmptyState(
+                        title = stringResource(R.string.bot_dms_empty_title),
+                        subtitle = stringResource(R.string.bot_dms_empty_desc),
+                        icon = Icons.Filled.Forum,
+                        modifier = Modifier.padding(paddingValues),
+                    )
 
-            else ->
-                LazyColumn(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(paddingValues),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(state.threads, key = { "${it.botName}:${it.sessionId}" }) { thread ->
-                        BotDmThreadRow(
-                            thread = thread,
-                            onClick = { viewModel.openThread(thread) },
-                        )
+                else ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(state.threads, key = { "${it.botName}:${it.sessionId}" }) { thread ->
+                            BotDmThreadRow(
+                                thread = thread,
+                                onClick = { viewModel.openThread(thread) },
+                            )
+                        }
                     }
-                }
-        }
+            }
+        } // Column
         if (state.unscannedBots.isNotEmpty()) {
             Text(
                 text =

@@ -1209,7 +1209,6 @@
     <string name="bots_dm_badge_desc">Last message is a DM from %1$s</string>
     <string name="bot_dms_empty_title">No bot DMs yet</string>
     <string name="bot_dms_empty_desc">When your bots message each other, the threads carrying those messages show up here.</string>
-    <string name="bot_dms_open_thread">Open %1$s\'s thread</string>
     <string name="bot_dms_partial">Could not check: %1$s</string>
     <plurals name="bot_dms_count">
         <item quantity="one">%1$d DM</item>
@@ -1219,5 +1218,4 @@
     <string name="chat_bot_dm_handle">@%1$s</string>
     <string name="screen_bot_dms">Bot DMs</string>
     <string name="bot_dms_last_from">from %1$s</string>
-    <string name="bot_dms_unscanned">Could not scan: %1$s</string>
 </resources>
