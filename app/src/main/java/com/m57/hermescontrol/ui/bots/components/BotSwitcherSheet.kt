@@ -14,9 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -33,6 +35,7 @@ import com.m57.hermescontrol.ui.common.EmptyState
 import com.m57.hermescontrol.ui.common.ErrorState
 import com.m57.hermescontrol.ui.common.SkeletonListState
 import com.m57.hermescontrol.ui.common.ToastEffect
+import kotlinx.coroutines.launch
 
 /**
  * Quick bot switcher (Fase 3): change the active bot without leaving the chat.
@@ -45,9 +48,17 @@ import com.m57.hermescontrol.ui.common.ToastEffect
  * cancelled mid-switch and leave the server flipped but the app not re-homed —
  * exactly the split-brain `ProfileSwitchCoordinator` exists to prevent.
  *
- * Selection goes through [BotsViewModel.selectBot] BEFORE dismissing, so a
- * failure keeps the sheet open and its toast visible; dismissal happens only
- * on success or on explicit user cancel.
+ * Selection goes through [BotsViewModel.selectBot] BEFORE dismissing, and the
+ * dismissal itself is the ViewModel's `onSwitched` callback — it fires only
+ * once the server has accepted the flip. A failed switch therefore keeps the
+ * sheet open with its toast visible, and tapping the bot that is already
+ * active reports that instead of closing on a no-op.
+ *
+ * **Dismissal is animated.** Every path that closes the sheet from inside goes
+ * through `sheetState.hide()` and only then drops the composable, per the M3
+ * pattern; flipping the caller's flag directly yanks the sheet off screen with
+ * no exit animation. `onDismissRequest` is the exception — Material has
+ * already settled the sheet by the time it fires.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,27 +69,41 @@ fun BotSwitcherSheet(
     viewModel: BotsViewModel = viewModel { BotsViewModel() },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+
+    // Settle the sheet out, THEN run [after] and drop the composable. hide()
+    // suspends until the animation finishes, so anything that would remove the
+    // sheet from composition has to wait on it.
+    val dismissAnimated: (() -> Unit) -> Unit = { after ->
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            after()
+        }
+    }
 
     // Failure feedback lives OUTSIDE the sheet: selectBot reports via
-    // toastMessage, and the sheet only dismisses on success — so a failed
-    // switch keeps the sheet open with the toast visible (and a stale toast
-    // never leaks into BotsScreen later).
+    // toastMessage and only calls back on success, so a failed switch keeps
+    // the sheet open with the toast visible (and a stale toast never leaks
+    // into BotsScreen later).
     LaunchedEffect(Unit) { viewModel.loadRoster() }
     ToastEffect(toastMessage = state.toastMessage, onClearToast = viewModel::clearToast)
 
-    ModalBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
+    ModalBottomSheet(
+        // Swipe-down and scrim taps arrive here already animated by Material —
+        // re-running hide() would be a second animation on a settled sheet.
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        sheetState = sheetState,
+    ) {
         BotSwitcherSheetContent(
             bots = state.bots,
             isLoading = state.isLoading,
             errorMessage = state.errorMessage,
-            onSelectBot = { name ->
-                viewModel.selectBot(name)
-                if (viewModel.uiState.value.errorMessage == null) onDismiss()
-            },
-            onViewAll = {
-                onDismiss()
-                onViewAll()
-            },
+            onSelectBot = { name -> viewModel.selectBot(name, onSwitched = { dismissAnimated {} }) },
+            // Navigation waits for the exit animation: navigating first tears
+            // down the host screen and takes the sheet with it, mid-slide.
+            onViewAll = { dismissAnimated(onViewAll) },
         )
     }
 }

@@ -36,4 +36,15 @@ data class BotRosterItem(
     val lastMessage: String? = null,
     /** Epoch seconds of the bot's most recent session, for recency sorting. */
     val lastActivityAt: Double? = null,
+    /**
+     * True when this bot's per-bot lookup FAILED, as opposed to the bot simply
+     * having nothing to show. Both end with a null [lastMessage], but they are
+     * different facts and the row says so: "no messages yet" is a bot you never
+     * talked to, "last message unavailable" is a fetch that broke. Collapsing
+     * the two would quietly report an outage as an empty inbox.
+     *
+     * A degraded row is still a usable row — tapping it switches to the bot as
+     * normal. This flag never blocks selection.
+     */
+    val lastMessageUnavailable: Boolean = false,
 )

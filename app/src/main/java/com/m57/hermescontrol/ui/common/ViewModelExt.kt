@@ -51,11 +51,28 @@ inline fun <T> ViewModel.refreshOnChange(
     eventType: String,
     crossinline apiCall: suspend () -> NetworkResult<T>,
     crossinline onSuccess: (T) -> Unit,
+): Job = refreshOnChange(setOf(eventType), apiCall, onSuccess)
+
+/**
+ * [refreshOnChange] over SEVERAL event types on one collector — a screen whose
+ * data is moved by more than one backend signature (the bot roster: last
+ * message from `sessions.changed`, presence from `gateway.changed`) must not
+ * run two independent in-flight guards, or a burst on both types fires two
+ * concurrent fan-outs.
+ *
+ * Unknown or never-broadcast types in [eventTypes] are free: the filter simply
+ * never matches, so a backend that only emits a subset degrades to refreshing
+ * on that subset.
+ */
+inline fun <T> ViewModel.refreshOnChange(
+    eventTypes: Set<String>,
+    crossinline apiCall: suspend () -> NetworkResult<T>,
+    crossinline onSuccess: (T) -> Unit,
 ): Job {
     var refreshInFlight = false
     return viewModelScope.launch {
         ChangeEventHub.events
-            .filter { it.type == eventType }
+            .filter { it.type in eventTypes }
             .collect { _ ->
                 if (refreshInFlight) return@collect
                 refreshInFlight = true

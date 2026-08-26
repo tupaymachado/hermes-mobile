@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.MediumTest
 import com.m57.hermescontrol.theme.HermesControlTheme
+import com.m57.hermescontrol.ui.bots.components.BotAvatar
 import com.m57.hermescontrol.ui.bots.components.BotRosterRow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -65,8 +66,56 @@ class BotRosterRowTest {
         setRow(BotRosterItem(name = "research", presence = BotPresence.OFFLINE))
 
         // Unmerged: the row merges its children's semantics, so the dot's own
-        // description is only addressable in the unmerged tree.
-        composeTestRule.onNodeWithContentDescription("Offline", useUnmergedTree = true).assertExists()
+        // description is only addressable in the unmerged tree. The bot's name
+        // is part of it — an 8dp dot announcing a bare "Offline" is a state
+        // with no subject.
+        composeTestRule.onNodeWithContentDescription("research: Offline", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun avatar_isDecorativeAndNeverAnnouncesTheMonogram() {
+        setRow(BotRosterItem(name = "research bot", presence = BotPresence.ONLINE))
+
+        // The name is announced by the Text beside it; "RB" must not be
+        // ANNOUNCED. clearAndSetSemantics hides the monogram from screen
+        // readers (merged tree) but the Text node still exists in the raw
+        // composition — so assert on the merged tree, which is what TalkBack
+        // actually reads, and require the monogram to be absent there.
+        composeTestRule.onNodeWithText("RB").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("RB").assertDoesNotExist()
+        // The row's real identity IS announced, via the name text.
+        composeTestRule.onNodeWithText("research bot").assertExists()
+        // The monogram IS rendered (unmerged tree) — just silenced. Guards the
+        // pair "rendered AND silent": if clearAndSetSemantics ever regresses,
+        // the merged-tree asserts above fail; if rendering regresses, this one
+        // fails.
+        composeTestRule.onNodeWithText("RB", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun avatar_announcesAnExplicitDescriptionWhenGivenOne() {
+        composeTestRule.setContent {
+            HermesControlTheme(useDynamicColors = false) {
+                BotAvatar(name = "research", contentDescription = "Avatar for research")
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Avatar for research").assertExists()
+    }
+
+    @Test
+    fun row_withUnavailableLastMessage_saysSoInsteadOfLookingEmpty() {
+        setRow(
+            BotRosterItem(
+                name = "broken",
+                presence = BotPresence.ONLINE,
+                lastMessageUnavailable = true,
+            ),
+        )
+
+        // A failed per-bot lookup must not read as "this bot has no messages".
+        composeTestRule.onNodeWithText("Last message unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No messages yet").assertDoesNotExist()
     }
 
     @Test

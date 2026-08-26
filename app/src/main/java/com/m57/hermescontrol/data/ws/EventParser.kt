@@ -154,7 +154,10 @@ object EventParser {
             // Change events (issue #784): gateway watches on-disk signatures
             // and broadcasts these so screens can refresh on change. pet.changed
             // intentionally absent — mobile has no pet feature.
-            "cron.changed", "sessions.changed", "platforms.changed", "pairing.changed" -> {
+            // gateway.changed is optional on the backend: parsing it costs
+            // nothing on gateways that never send it, and it is what makes the
+            // bot roster's presence column live.
+            "cron.changed", "sessions.changed", "platforms.changed", "pairing.changed", "gateway.changed" -> {
                 WsEvent.ChangeEvent(eventType, payload)
             }
 

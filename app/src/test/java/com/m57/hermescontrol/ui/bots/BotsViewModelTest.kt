@@ -293,6 +293,21 @@ class BotsViewModelTest {
         assertEquals(2, state.bots.size)
         assertEquals("still here", state.bots.first { it.name == "healthy" }.lastMessage)
         assertNull(state.bots.first { it.name == "broken" }.lastMessage)
+        // Fase 4: the broken row says so — a failed lookup is not an empty inbox.
+        assertTrue(state.bots.first { it.name == "broken" }.lastMessageUnavailable)
+        assertFalse(state.bots.first { it.name == "healthy" }.lastMessageUnavailable)
+    }
+
+    @Test
+    fun `a bot with no sessions is not marked unavailable`() {
+        // "Never talked to" and "lookup broke" both end with a null last
+        // message; only the second is a degraded row.
+        stubRoster(ProfileInfo(name = "fresh"))
+
+        val bot = loadedViewModel().uiState.value.bots.single()
+
+        assertNull(bot.lastMessage)
+        assertFalse(bot.lastMessageUnavailable)
     }
 
     @Test
@@ -303,6 +318,7 @@ class BotsViewModelTest {
         val bot = loadedViewModel().uiState.value.bots.single()
 
         assertNull(bot.lastMessage)
+        assertTrue(bot.lastMessageUnavailable)
         // The session itself was readable, so recency survives the failure.
         assertEquals(42.0, bot.lastActivityAt!!, 0.0)
     }
@@ -348,15 +364,51 @@ class BotsViewModelTest {
     }
 
     @Test
-    fun `selecting the already-active bot is a no-op`() {
+    fun `selecting the already-active bot switches nothing but says so`() {
         stubRoster(ProfileInfo(name = "default"), active = "default")
 
         val vm = loadedViewModel()
-        vm.selectBot("default")
+        var switched = false
+        vm.selectBot("default", onSwitched = { switched = true })
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any(), any(), any()) }
-        assertNull(vm.uiState.value.toastMessage)
+        // Fase 4: this used to be a SILENT no-op, which from the switcher sheet
+        // looked like the sheet closed and did nothing. No callback either, so
+        // the sheet stays open behind the toast.
+        assertTrue(vm.uiState.value.toastMessage!!.contains("already active"))
+        assertFalse("a no-op must not report a switch", switched)
+    }
+
+    @Test
+    fun `onSwitched fires only after the server accepts the flip`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+
+        val vm = loadedViewModel()
+        var switched = 0
+        vm.selectBot("research", onSwitched = { switched++ })
+        // Before the coordinator answers, nothing has been confirmed yet.
+        assertEquals(0, switched)
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, switched)
+    }
+
+    @Test
+    fun `onSwitched does not fire when the switch fails`() {
+        stubRoster(ProfileInfo(name = "default"), ProfileInfo(name = "research"), active = "default")
+        coEvery { ProfileSwitchCoordinator.switchProfile("research", any(), any()) } returns
+            NetworkResult.Failure(NetworkError.Http(500, "boom"))
+
+        val vm = loadedViewModel()
+        var switched = false
+        vm.selectBot("research", onSwitched = { switched = true })
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The sheet hangs its dismissal on this: closing on a failed switch
+        // would leave the failure toast with nothing on screen to explain it.
+        assertFalse(switched)
     }
 
     @Test

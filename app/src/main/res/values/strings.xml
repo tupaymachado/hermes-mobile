@@ -88,6 +88,9 @@
     <string name="bots_presence_offline">Offline</string>
     <string name="bots_presence_unknown">Status unknown</string>
     <string name="bots_last_message_none">No messages yet</string>
+    <string name="bots_last_message_unavailable">Last message unavailable</string>
+    <!-- Presence announced to screen readers: bot name, then state. %1$s = bot, %2$s = state -->
+    <string name="bots_presence_desc">%1$s: %2$s</string>
     <string name="bots_switcher_open">Switch bot</string>
     <string name="bots_switcher_view_all">View all bots</string>
     <string name="screen_profiles">Profiles</string>

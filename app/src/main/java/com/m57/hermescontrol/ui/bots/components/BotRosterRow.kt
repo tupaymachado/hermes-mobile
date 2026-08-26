@@ -59,6 +59,9 @@ fun BotRosterRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // No contentDescription: the name is announced by the Text right
+            // next to it, so describing the avatar would double the
+            // announcement (see BotAvatar's accessibility note).
             BotAvatar(name = bot.name)
 
             Column(modifier = Modifier.weight(1f)) {
@@ -66,7 +69,7 @@ fun BotRosterRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    PresenceDot(presence = bot.presence)
+                    PresenceDot(botName = bot.name, presence = bot.presence)
                     Text(
                         text = bot.name,
                         style = MaterialTheme.typography.titleSmall,
@@ -77,14 +80,32 @@ fun BotRosterRow(
                     )
                 }
                 Text(
-                    // No last message is a normal state (a bot never talked to
-                    // yet, or a lookup that degraded) — say so instead of
-                    // collapsing the row and making the list jump.
-                    text = bot.lastMessage ?: stringResource(R.string.bots_last_message_none),
+                    // Three distinct states, never collapsed into one: a real
+                    // last message; "no messages yet" for a bot never talked
+                    // to; and the degraded case, where the lookup for THIS bot
+                    // failed. The row always renders — a broken last-message
+                    // fetch is not a broken roster, and the bot is still
+                    // selectable.
+                    text =
+                        when {
+                            bot.lastMessage != null -> bot.lastMessage
+                            bot.lastMessageUnavailable ->
+                                stringResource(R.string.bots_last_message_unavailable)
+
+                            else -> stringResource(R.string.bots_last_message_none)
+                        },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color =
+                        if (bot.lastMessage == null && bot.lastMessageUnavailable) {
+                            // Muted error, not the loud one: the row is degraded,
+                            // not failed.
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("bot_last_message"),
                 )
             }
 
@@ -100,9 +121,18 @@ fun BotRosterRow(
     }
 }
 
-/** Small semantic presence indicator; colours come from the status palette. */
+/**
+ * Small semantic presence indicator; colours come from the status palette.
+ *
+ * The description carries the bot's NAME as well as the state: the dot is an
+ * 8dp box with no text of its own, so a bare "Offline" in the a11y tree is a
+ * state with no subject once the row's children are read in sequence.
+ */
 @Composable
-private fun PresenceDot(presence: BotPresence) {
+private fun PresenceDot(
+    botName: String,
+    presence: BotPresence,
+) {
     val statusColors = LocalHermesStatusColors.current
     val color =
         when (presence) {
@@ -111,13 +141,14 @@ private fun PresenceDot(presence: BotPresence) {
             BotPresence.OFFLINE -> statusColors.neutral
             BotPresence.UNKNOWN -> statusColors.neutral
         }
-    val label =
+    val state =
         when (presence) {
             BotPresence.ACTIVE -> stringResource(R.string.bots_presence_active)
             BotPresence.ONLINE -> stringResource(R.string.bots_presence_online)
             BotPresence.OFFLINE -> stringResource(R.string.bots_presence_offline)
             BotPresence.UNKNOWN -> stringResource(R.string.bots_presence_unknown)
         }
+    val label = stringResource(R.string.bots_presence_desc, botName, state)
     Box(
         modifier =
             Modifier

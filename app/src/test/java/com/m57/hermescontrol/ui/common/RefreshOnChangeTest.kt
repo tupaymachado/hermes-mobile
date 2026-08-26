@@ -41,6 +41,19 @@ class RefreshOnChangeTest {
         }
     }
 
+    /** Multi-type variant: one collector, several backend signatures. */
+    private class MultiTypeViewModel : ViewModel() {
+        val refreshes = MutableStateFlow(0)
+
+        init {
+            refreshOnChange(
+                eventTypes = setOf(ChangeEvents.SESSIONS, ChangeEvents.GATEWAY),
+                apiCall = { NetworkResult.Success(Unit) },
+                onSuccess = { refreshes.value += 1 },
+            )
+        }
+    }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -63,6 +76,32 @@ class RefreshOnChangeTest {
             ChangeEventHub.emit(WsEvent.ChangeEvent(ChangeEvents.CRON))
             advanceUntilIdle()
             assertEquals("refreshed", viewModel.state.value)
+        }
+
+    @Test
+    fun testRefreshOnChange_multiType_refreshesOnEitherType() =
+        runTest(testDispatcher) {
+            // Bot Mode Fase 4: the roster refreshes on sessions.changed (last
+            // message) AND gateway.changed (presence), off ONE collector.
+            val viewModel = MultiTypeViewModel()
+            advanceUntilIdle()
+            ChangeEventHub.emit(WsEvent.ChangeEvent(ChangeEvents.SESSIONS))
+            advanceUntilIdle()
+            ChangeEventHub.emit(WsEvent.ChangeEvent(ChangeEvents.GATEWAY))
+            advanceUntilIdle()
+            assertEquals(2, viewModel.refreshes.value)
+        }
+
+    @Test
+    fun testRefreshOnChange_multiType_ignoresUnlistedTypes() =
+        runTest(testDispatcher) {
+            // A backend that only emits a subset degrades to that subset — it
+            // never refreshes on something nobody asked for.
+            val viewModel = MultiTypeViewModel()
+            advanceUntilIdle()
+            ChangeEventHub.emit(WsEvent.ChangeEvent(ChangeEvents.CRON))
+            advanceUntilIdle()
+            assertEquals(0, viewModel.refreshes.value)
         }
 
     @Test
