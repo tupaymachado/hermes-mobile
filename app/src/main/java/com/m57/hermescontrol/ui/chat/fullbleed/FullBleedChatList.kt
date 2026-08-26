@@ -29,6 +29,8 @@ import com.m57.hermescontrol.ui.chat.asBotDm
 import com.m57.hermescontrol.ui.chat.components.ChatScrollController
 import com.m57.hermescontrol.ui.chat.components.ClarifyBubble
 import com.m57.hermescontrol.ui.chat.components.ReasoningCard
+import com.m57.hermescontrol.ui.chat.components.ToolActionCards
+import com.m57.hermescontrol.ui.chat.components.detectToolAction
 import com.m57.hermescontrol.ui.chat.toolCallMilestones
 import com.m57.hermescontrol.ui.common.EmptyState
 
@@ -94,6 +96,25 @@ fun FullBleedChatList(
             remember(turns, isLoadingOlder) {
                 messageIdToLazyIndex(turns, leadingItems = if (isLoadingOlder) 1 else 0)
             }
+        // PM2-A: side-effect summary cards ("Created routine · standup"), one
+        // list per turn, aligned with [turns] by index. Detection is pure and
+        // payload-driven (see [detectToolAction]) so it costs one pass per
+        // turn change, not one per recomposition; the cards themselves render
+        // INSIDE the turn's last item, which is why nothing here perturbs
+        // [lazyIndexById].
+        val actionsByTurn =
+            remember(turns) {
+                turns.map { turn ->
+                    if (turn !is ChatTurn.Agent) {
+                        emptyList()
+                    } else {
+                        turn.entries
+                            .filterIsInstance<AgentEntry.ToolRow>()
+                            .mapNotNull { entry -> detectToolAction(entry.message) }
+                            .sortedBy { it.timestampMs }
+                    }
+                }
+            }
 
         // Scroll the current search match into view, word-focused. Lives here
         // (not in ChatLifecycleEffects) because only this composable knows
@@ -135,7 +156,7 @@ fun FullBleedChatList(
             }
 
             var entryIndex = 0
-            turns.forEach { turn ->
+            turns.forEachIndexed { turnIndex, turn ->
                 when (turn) {
                     is ChatTurn.User -> {
                         // Eager captures: item lambda reads these at
@@ -174,6 +195,15 @@ fun FullBleedChatList(
 
                     is ChatTurn.Agent -> {
                         var firstProseSeen = false
+                        // PM2-A: the turn's side-effect cards, and the index of
+                        // the entry they trail. Rendering them inside the LAST
+                        // entry's item puts them after the tool bubbles and
+                        // before the next user turn without emitting an item of
+                        // their own — [messageIdToLazyIndex] mirrors the item
+                        // order one-for-one to drive search-match scrolling, so
+                        // an extra item would shift every following match.
+                        val turnActions = actionsByTurn[turnIndex]
+                        val lastEntryIndex = turn.entries.lastIndex
                         // Reasoning hoist: the turn's reasoning renders at the
                         // TOP of the turn — above tool rows — so thinking
                         // leads, then the tool work, then the answer. The
@@ -196,7 +226,9 @@ fun FullBleedChatList(
                                 }
                             }
                         }
-                        turn.entries.forEach { entry ->
+                        turn.entries.forEachIndexed { entryPos, entry ->
+                            val trailingActions =
+                                if (entryPos == lastEntryIndex) turnActions else emptyList()
                             when (entry) {
                                 is AgentEntry.Prose -> {
                                     val proseMessage = entry.message
@@ -253,6 +285,7 @@ fun FullBleedChatList(
                                             milestone?.let { count ->
                                                 ToolCallDivider(count = count, maxPerTurn = maxToolCallsPerTurn)
                                             }
+                                            ToolActionCards(actions = trailingActions)
                                         }
                                     }
                                     firstProseSeen = true
@@ -268,6 +301,7 @@ fun FullBleedChatList(
                                             milestone?.let { count ->
                                                 ToolCallDivider(count = count, maxPerTurn = maxToolCallsPerTurn)
                                             }
+                                            ToolActionCards(actions = trailingActions)
                                         }
                                     }
                                     entryIndex++
@@ -288,6 +322,7 @@ fun FullBleedChatList(
                                                     onRespondApproval = viewModel::respondToApproval,
                                                 )
                                             }
+                                            ToolActionCards(actions = trailingActions)
                                         }
                                     }
                                     entryIndex++

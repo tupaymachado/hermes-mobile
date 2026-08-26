@@ -1218,4 +1218,10 @@
     <string name="chat_bot_dm_handle">@%1$s</string>
     <string name="screen_bot_dms">Bot DMs</string>
     <string name="bot_dms_last_from">from %1$s</string>
+    <!-- Bot Mode PM2 — inline tool-action summary cards + bot-aware composer -->
+    <string name="chat_tool_action_cron_created">Created routine</string>
+    <string name="chat_tool_action_message_sent">Message sent</string>
+    <string name="chat_tool_action_scheduled">Scheduled</string>
+    <string name="chat_tool_action_detail">%1$s \u00b7 %2$s</string>
+    <string name="chat_input_placeholder_bot">Message %1$s\u2026</string>
 </resources>

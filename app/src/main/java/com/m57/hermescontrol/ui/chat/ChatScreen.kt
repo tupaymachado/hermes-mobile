@@ -450,7 +450,9 @@ fun ChatScreen(
                                 .clickable { showBotSwitcher = true }
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                     ) {
-                        BotAvatar(name = activeBot, size = 24.dp)
+                        // isActive by construction: this chip only exists
+                        // when a bot is the one the app is homed on.
+                        BotAvatar(name = activeBot, size = 24.dp, isActive = true)
                         Spacer(modifier = Modifier.width(8.dp))
                         // weight(1f) is REQUIRED here: AutoScrollingTitleText
                         // fillMaxWidth()s its root unconditionally, so without a

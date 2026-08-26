@@ -57,8 +57,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.m57.hermescontrol.R
+import com.m57.hermescontrol.data.local.AuthManager
 import com.m57.hermescontrol.data.model.Attachment
 import com.m57.hermescontrol.data.ws.CommandBlocklist
 import com.m57.hermescontrol.data.ws.CommandCatalog
@@ -207,6 +209,14 @@ fun ChatInputBar(
                             .padding(horizontal = 8.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // PM2-B: with a bot active the composer names it, so the
+                    // field says WHO the message is going to — the chat is
+                    // otherwise identical whatever bot you are homed on.
+                    // Captured in a plain val first: Kotlin never smart-casts a
+                    // DELEGATED property, so isNullOrBlank() alone would leave
+                    // String? flowing into a String parameter.
+                    val activeBotState by AuthManager.activeProfileId.collectAsStateWithLifecycle()
+                    val activeBot = activeBotState?.takeIf { it.isNotBlank() }
                     val placeholderText =
                         when {
                             !isConnected -> {
@@ -219,6 +229,13 @@ fun ChatInputBar(
 
                             isAgentTyping -> {
                                 stringResource(R.string.chat_input_placeholder_waiting)
+                            }
+
+                            // Only the resting placeholder is bot-aware: the
+                            // three states above report what the CONNECTION is
+                            // doing, which no bot name makes clearer.
+                            activeBot != null -> {
+                                stringResource(R.string.chat_input_placeholder_bot, activeBot)
                             }
 
                             else -> {

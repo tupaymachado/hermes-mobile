@@ -62,8 +62,10 @@ fun BotRosterRow(
         ) {
             // No contentDescription: the name is announced by the Text right
             // next to it, so describing the avatar would double the
-            // announcement (see BotAvatar's accessibility note).
-            BotAvatar(name = bot.name)
+            // announcement (see BotAvatar's accessibility note). The active
+            // ring (PM2-D) is visual only, for the same reason — the row
+            // already announces the state through the check icon below.
+            BotAvatar(name = bot.name, isActive = bot.isActive)
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
