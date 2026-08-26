@@ -791,4 +791,10 @@
     <string name="chat_bot_dm_handle">@%1$s</string>
     <string name="screen_bot_dms">봇 DM</string>
     <string name="bot_dms_last_from">%1$s에서</string>
+    <!-- Bot Mode PM2 — 인라인 도구 작업 요약 카드 + 봇 인식 입력창 -->
+    <string name="chat_tool_action_cron_created">루틴 생성됨</string>
+    <string name="chat_tool_action_message_sent">메시지 전송됨</string>
+    <string name="chat_tool_action_scheduled">예약됨</string>
+    <string name="chat_tool_action_detail">%1$s \u00b7 %2$s</string>
+    <string name="chat_input_placeholder_bot">%1$s에게 메시지 보내기\u2026</string>
 </resources>

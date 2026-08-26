@@ -1090,4 +1090,10 @@
     <string name="chat_bot_dm_handle">@%1$s</string>
     <string name="screen_bot_dms">机器人私信</string>
     <string name="bot_dms_last_from">来自 %1$s</string>
+    <!-- Bot Mode PM2 — 内联工具操作摘要卡片 + 机器人感知输入框 -->
+    <string name="chat_tool_action_cron_created">已创建例行任务</string>
+    <string name="chat_tool_action_message_sent">消息已发送</string>
+    <string name="chat_tool_action_scheduled">已安排</string>
+    <string name="chat_tool_action_detail">%1$s \u00b7 %2$s</string>
+    <string name="chat_input_placeholder_bot">给 %1$s 发消息\u2026</string>
 </resources>
