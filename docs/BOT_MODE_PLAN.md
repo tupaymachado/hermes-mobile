@@ -314,21 +314,93 @@ Fonte: `website/docs/user-guide/bot-mode.md` + `features/*.md` do repositório u
 
 **Estimativa:** ~3-4 dias · 1-2 PRs. Risco baixo — tudo é leitura de estado que já existe.
 
-## PM2 — Routines por bot (pane de cron namespaced)
+## PM2 — Routines por bot + Bot switcher lateral (swipeable)
 
-**O que é no Desktop:** cron jobs namespaced `[bot: <nome>]` vivem no pane do bot responsável ("summarize my inbox every morning" aparece ao lado do bot que faz). Runs caem no chat histórico do próprio bot.
+**Inspiração:** Spacek (cliente multi-agente). Adota os padrões visuais A/B/D e o gesto E — descartado C (quick-reply chips). Bot DMs (PM1) anotado pra revisão futura; sem ação aqui.
 
-**Estado atual no mobile:** o app já tem tela de cron genérica (lista todos). Falta: filtro/agrupamento por profile e a associação job↔bot.
+### A. "Created routine" / feedback inline de tool actions
+
+Quando uma tool executa e produz um efeito colateral relevante (cron criado, mensagem enviada, schedule agendado, etc), o chat renderiza um **summary card inline** no histórico em vez de só o tool bubble cru. Mesma posição visual do Spacek ("Created routine • nome + ícone").
 
 **Escopo:**
-- Detectar jobs `[bot: nome]` via parsing do campo existente da API de cron
-- Na BotsScreen/sheet: seção "Routines" por bot (lista + toggle pause/resume)
-- Criar routine a partir do bot (pré-preenche o namespace)
-- Runs aparecem no canonical chat do bot (já acontece naturalmente — sessions de cron são profile-scoped)
+- Detectar eventos relevantes via o mesmo listener de tools do chat (provavelmente `ChatToolResult` ou `ToolCallSummary`)
+- Modelo `ToolActionCard(action, label, icon)` derivado de `toolCallId` + outcome
+- Renderiza antes do próximo user turn (não inline com tool call — não polui o debug)
+- Strings novas (en/ko/zh)
 
-**Arquivos prováveis:** `ui/cron/*` (filtro), `BotsViewModel`/novo `BotRoutinesViewModel`, `BotsScreen`.
+**Arquivos prováveis:** `ui/chat/components/ToolActionCard.kt`, hook no `FullBleedChatList`, evento a ser decidido conforme o que o ChatViewModel já emite.
 
-**Estimativa:** ~3-5 dias · 1 PR. Risco baixo-médio (parsing do namespace + UX de criação).
+**Estimativa:** ~2 dias.
+
+### B. Composer contextual por bot
+
+Placeholder e ações do composer mudam conforme `activeProfileId` ativo:
+- **Sem bot ativo:** placeholder e comportamento atuais (gateway raw)
+- **Com bot ativo:** placeholder `Message <bot-display-name>`, hint sutil de que bot-to-bot @mentions estão disponíveis (sem ainda implementar o autocomplete — isso é PM4)
+
+**Escopo:**
+- `ChatComposer` (ou equivalente) lê `AuthManager.activeProfileId` + lookup do profile
+- Strings com placeholder parametrizado (`R.string.chat_composer_placeholder_bot`, com `%1$s` = display name)
+- i18n completa
+
+**Arquivos prováveis:** `ui/chat/ChatComposer.kt`, `strings.xml` × 3.
+
+**Estimativa:** ~1 dia.
+
+### D. Avatar mais saturado + ring no bot ativo
+
+Avatares do Spacek usam cores mais vibrantes e dão um ring ao redor do bot ativo. Nosso `BotAvatar` usa paleta de 4 slots do Material Theme — funciona mas é sóbrio.
+
+**Escopo:**
+- `BotAvatar(name, size, isActive)` — quando `isActive = true`, adiciona um Stroke/Border com cor primária
+- Saturar levemente a paleta (ex: trocar `surfaceVariant` por algo mais distintivo)
+- A11y: o ring **não** vira semantics — o avatar continua sendo decoration; o estado ativo já vem do nome+contexto visual
+
+**Arquivos prováveis:** `ui/bots/components/BotAvatar.kt`, `BotRosterRow.kt`, `BotSwitcherSheet.kt`.
+
+**Estimativa:** ~0.5 dia.
+
+### E. Bot switcher lateral swipeable (ModalDrawer customizado)
+
+Uma sidebar lateral esquerda, dismissible por gesto, que mostra a lista de bots como switcher persistente. Complementa (não substitui) o `BotSwitcherSheet` da Fase 3, que continua sendo o caminho rápido pelo título.
+
+**Comportamento:**
+- **Abrir:** swipe da borda esquerda pra direita (gesto padrão Material 3); ou tap no avatar/bot-name no header
+- **Fechar:** tap no scrim, swipe pra esquerda, ou tap no bot selecionado (que também navega pro chat dele — duplo papel)
+- **Conteúdo:** lista de bots igual à `BotRosterRow`, com o ativo destacado pelo ring (D)
+- **Persistente sobre o chat:** o usuário volta exatamente onde estava
+
+**Escopo:**
+- Componente `BotSwitcherDrawer` (`ModalNavigationDrawer` ou `AnchoredDraggable` do Material 3)
+- Integrar com `DrawerGestureController` (já existe — AGENTS.md exige screen-owned): declarar quais telas podem ativar o drawer de bots (Converse: Bots, Bot DMs, Chat; sub-pages: false)
+- Tap no bot = switch via `BotsViewModel.selectBot()` + fecha drawer
+- Avatar no header do chat vira o trigger secundário
+- Não duplica o `BotSwitcherSheet` — só compartilha a fonte (`BotRosterItem` + `BotsViewModel`)
+
+**Caveat:** o `ModalNavigationDrawer` raiz do Hermes já existe pro menu principal. Ou este é um **segundo drawer** empilhado (mais complexo) ou substituímos o `NavIcon.Menu` no header do Chat por um `NavIcon.Bots` que abre este. Decidir arquitetura antes de codar.
+
+**Arquivos prováveis:** novo `ui/bots/components/BotSwitcherDrawer.kt`, mudanças em `ChatScreen` (header trigger), `HermesScaffold` (gesture opt-in por tela), `BotsViewModel` (reuso).
+
+**Estimativa:** ~3 dias. Risco médio (gesture ownership é delicado — tem que coexistir com o menu principal sem brigar pelo gesto da borda).
+
+---
+
+### Tarefas de revisão postergadas
+
+- **Bot DMs (PM1):** anotar pra revisitar. Atualmente é uma tela agregada de threads com tráfego bot-to-bot. Pode:
+  - evoluir pra "inbox" de mentions (precisa PM4 pra saber de onde vem)
+  - virar "Activity feed" do teu dia (combinado com sessions recentes)
+  - ser escondida atrás de um toggle se ninguém usa
+  - **Decisão: reavaliar após PM4 (autocomplete) — sem o autocomplete, "Bot DMs" é só arquivo de mensagens; com ele, vira inbox real.**
+
+### Total PM2
+
+```
+A (cards)  →  B (composer)  →  D (avatar ring)  →  E (drawer)
+  ~2d            ~1d              ~0.5d                ~3d
+```
+
+**~6.5 dias · 1-2 PRs.** Sugiro fatiar: PR1 = A+B+D (baixo risco, polish visual), PR2 = E (gesture ownership).
 
 ## PM3 — Group chats (2-6 bots)
 
