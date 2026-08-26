@@ -76,10 +76,15 @@ class BotRosterRowTest {
     fun avatar_isDecorativeAndNeverAnnouncesTheMonogram() {
         setRow(BotRosterItem(name = "research bot", presence = BotPresence.ONLINE))
 
-        // The name is announced by the Text beside it; "RB" must not reach the
-        // a11y tree at all (BotAvatar clears its own semantics).
-        composeTestRule.onNodeWithText("RB", useUnmergedTree = true).assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("RB", useUnmergedTree = true).assertDoesNotExist()
+        // The name is announced by the Text beside it; "RB" must not be
+        // ANNOUNCED. clearAndSetSemantics hides the monogram from screen
+        // readers (merged tree) but the Text node still exists in the raw
+        // composition — so assert on the merged tree, which is what TalkBack
+        // actually reads, and require the monogram to be absent there.
+        composeTestRule.onNodeWithText("RB").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("RB").assertDoesNotExist()
+        // The row's real identity IS announced, via the name text.
+        composeTestRule.onNodeWithText("research bot").assertExists()
     }
 
     @Test
