@@ -33,7 +33,7 @@ object NavigationController {
     private val primaryScreens: MutableSet<NavKey> =
         mutableSetOf(
             BotsScreen,
-            BotDmsScreen,
+            ActivityScreen,
             SkillsScreen,
             CronJobsScreen,
             SystemScreen,

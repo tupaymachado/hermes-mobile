@@ -64,7 +64,7 @@
 
     <!-- Bottom navigation tabs -->
     <string name="nav_tab_bots">机器人</string>
-    <string name="nav_tab_bot_dms">机器人私信</string>
+    <string name="nav_tab_activity">动态</string>
     <string name="nav_tab_more">更多</string>
     <string name="screen_chat">对话</string>
     <string name="screen_skills">技能</string>
@@ -1101,4 +1101,24 @@
     <string name="chat_tool_action_scheduled">已安排</string>
     <string name="chat_tool_action_detail">%1$s \u00b7 %2$s</string>
     <string name="chat_input_placeholder_bot">给 %1$s 发消息\u2026</string>
+
+    <!-- Activity feed (bottom-nav middle tab) -->
+    <string name="screen_activity">动态</string>
+    <string name="activity_empty_title">暂无内容</string>
+    <string name="activity_empty_desc">机器人互相发送消息或例行任务运行后，会显示在这里。</string>
+    <string name="activity_section_today">今天</string>
+    <string name="activity_section_yesterday">昨天</string>
+    <string name="activity_section_earlier">更早</string>
+    <string name="activity_section_undated">无日期</string>
+    <string name="activity_dm_line">%1$s 发消息给 %2$s</string>
+    <string name="activity_prompt_line">你发消息给 %1$s</string>
+    <string name="activity_routine_ran">%1$s 已运行</string>
+    <string name="activity_routine_failed">%1$s 运行失败</string>
+    <string name="activity_routine_desc">例行任务</string>
+    <string name="activity_partial">无法扫描：%1$s</string>
+    <string name="activity_routines_unavailable">无法获取例行任务运行记录</string>
+    <string name="activity_time_now">刚刚</string>
+    <string name="activity_time_minutes">%1$d分</string>
+    <string name="activity_time_hours">%1$d小时</string>
+    <string name="activity_time_days">%1$d天</string>
 </resources>

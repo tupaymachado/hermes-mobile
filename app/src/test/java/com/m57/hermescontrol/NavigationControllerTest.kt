@@ -259,7 +259,7 @@ class NavigationControllerTest {
     @Test
     fun `isPrimaryScreen returns true for default screens`() {
         assertTrue("BotsScreen should be primary by default", NavigationController.isPrimaryScreen(BotsScreen))
-        assertTrue("BotDmsScreen should be primary by default", NavigationController.isPrimaryScreen(BotDmsScreen))
+        assertTrue("ActivityScreen should be primary by default", NavigationController.isPrimaryScreen(ActivityScreen))
         assertTrue("SkillsScreen should be primary by default", NavigationController.isPrimaryScreen(SkillsScreen))
         assertTrue("CronJobsScreen should be primary by default", NavigationController.isPrimaryScreen(CronJobsScreen))
         assertTrue("SystemScreen should be primary by default", NavigationController.isPrimaryScreen(SystemScreen))

@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavKey
 import com.m57.hermescontrol.ui.common.NeurologyIcon
 import com.m57.hermescontrol.ui.achievements.AchievementsScreen as AchievementsScreenContent
+import com.m57.hermescontrol.ui.activity.ActivityScreen as ActivityScreenContent
 import com.m57.hermescontrol.ui.analytics.AnalyticsScreen as AnalyticsScreenContent
 import com.m57.hermescontrol.ui.billing.BillingScreen as BillingScreenContent
 import com.m57.hermescontrol.ui.bots.BotDmsScreen as BotDmsScreenContent
@@ -94,12 +95,21 @@ object ScreenRegistry {
                 Icons.Filled.History,
                 DrawerSection.CONVERSE,
             ) { sessionId, openDrawer -> HistoryScreenContent(onOpenDrawer = openDrawer) },
+            // Bots and Activity are bottom-nav TABS (drawerSection = null): the
+            // bar is always on screen where they matter, so a duplicate drawer
+            // entry would just be a second door to the same room.
             ScreenDefinition(
                 BotsScreen,
                 R.string.screen_bots,
                 Icons.Filled.SmartToy,
-                DrawerSection.CONVERSE,
+                null,
             ) { sessionId, openDrawer -> BotsScreenContent(onOpenDrawer = openDrawer) },
+            ScreenDefinition(
+                ActivityScreen,
+                R.string.screen_activity,
+                Icons.Filled.Bolt,
+                null,
+            ) { sessionId, openDrawer -> ActivityScreenContent(onOpenDrawer = openDrawer) },
             ScreenDefinition(
                 BotDmsScreen,
                 R.string.screen_bot_dms,

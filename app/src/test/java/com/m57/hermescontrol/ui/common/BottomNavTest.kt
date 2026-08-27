@@ -1,5 +1,6 @@
 package com.m57.hermescontrol.ui.common
 
+import com.m57.hermescontrol.ActivityScreen
 import com.m57.hermescontrol.BotDmsScreen
 import com.m57.hermescontrol.BotsScreen
 import com.m57.hermescontrol.ChatScreen
@@ -27,13 +28,15 @@ class BottomNavTest {
     @Test
     fun `bar shows on the tab destinations`() {
         assertTrue(BottomNav.isVisibleOn(BotsScreen))
-        assertTrue(BottomNav.isVisibleOn(BotDmsScreen))
+        assertTrue(BottomNav.isVisibleOn(ActivityScreen))
     }
 
     @Test
     fun `bar shows on drawer screens so the tabs stay reachable`() {
         assertTrue(BottomNav.isVisibleOn(CronJobsScreen))
         assertTrue(BottomNav.isVisibleOn(SettingsScreen))
+        // Bot DMs is the passive archive behind "More" now, not a tab.
+        assertTrue(BottomNav.isVisibleOn(BotDmsScreen))
     }
 
     @Test
@@ -61,13 +64,14 @@ class BottomNavTest {
     @Test
     fun `tab destinations select themselves`() {
         assertEquals(BottomNavTab.BOTS, BottomNav.selectedOn(BotsScreen))
-        assertEquals(BottomNavTab.DMS, BottomNav.selectedOn(BotDmsScreen))
+        assertEquals(BottomNavTab.ACTIVITY, BottomNav.selectedOn(ActivityScreen))
     }
 
     @Test
     fun `everything else reads as More`() {
         assertEquals(BottomNavTab.MORE, BottomNav.selectedOn(CronJobsScreen))
         assertEquals(BottomNavTab.MORE, BottomNav.selectedOn(SettingsScreen))
+        assertEquals(BottomNavTab.MORE, BottomNav.selectedOn(BotDmsScreen))
     }
 
     // ── tab wiring ────────────────────────────────────────────────────────
@@ -76,6 +80,6 @@ class BottomNavTest {
     fun `More has no destination — it opens the drawer`() {
         assertEquals(null, BottomNavTab.MORE.key)
         assertEquals(BotsScreen, BottomNavTab.BOTS.key)
-        assertEquals(BotDmsScreen, BottomNavTab.DMS.key)
+        assertEquals(ActivityScreen, BottomNavTab.ACTIVITY.key)
     }
 }

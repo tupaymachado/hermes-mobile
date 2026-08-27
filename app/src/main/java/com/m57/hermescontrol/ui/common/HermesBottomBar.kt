@@ -2,7 +2,7 @@ package com.m57.hermescontrol.ui.common
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.navigation3.runtime.NavKey
-import com.m57.hermescontrol.BotDmsScreen
+import com.m57.hermescontrol.ActivityScreen
 import com.m57.hermescontrol.BotsScreen
 import com.m57.hermescontrol.ChatScreen
 import com.m57.hermescontrol.NavigationController
@@ -37,7 +37,7 @@ enum class BottomNavTab(
     val testTag: String,
 ) {
     BOTS(R.string.nav_tab_bots, Icons.Filled.SmartToy, BotsScreen, "bottom_nav_bots"),
-    DMS(R.string.nav_tab_bot_dms, Icons.Filled.Forum, BotDmsScreen, "bottom_nav_dms"),
+    ACTIVITY(R.string.nav_tab_activity, Icons.Filled.Bolt, ActivityScreen, "bottom_nav_activity"),
     MORE(R.string.nav_tab_more, Icons.Filled.MoreHoriz, null, "bottom_nav_more"),
 }
 
@@ -76,7 +76,7 @@ object BottomNav {
     fun selectedOn(screen: NavKey): BottomNavTab =
         when (screen) {
             BotsScreen -> BottomNavTab.BOTS
-            BotDmsScreen -> BottomNavTab.DMS
+            ActivityScreen -> BottomNavTab.ACTIVITY
             else -> BottomNavTab.MORE
         }
 }
