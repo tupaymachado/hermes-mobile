@@ -107,12 +107,6 @@ object ScreenRegistry {
                 DrawerSection.CONVERSE,
             ) { sessionId, openDrawer -> BotDmsScreenContent(onOpenDrawer = openDrawer) },
             ScreenDefinition(
-                ProfilesScreen,
-                R.string.screen_profiles,
-                Icons.Filled.AccountCircle,
-                DrawerSection.CONVERSE,
-            ) { sessionId, openDrawer -> ProfilesScreenContent(onOpenDrawer = openDrawer) },
-            ScreenDefinition(
                 CronJobsScreen,
                 R.string.screen_cron,
                 Icons.Filled.Schedule,
@@ -130,6 +124,12 @@ object ScreenRegistry {
                 Icons.Filled.ViewKanban,
                 DrawerSection.AUTOMATE,
             ) { sessionId, openDrawer -> KanbanScreenContent(onOpenDrawer = openDrawer) },
+            ScreenDefinition(
+                ProfilesScreen,
+                R.string.screen_profiles,
+                Icons.Filled.AccountCircle,
+                DrawerSection.CONFIGURE,
+            ) { sessionId, openDrawer -> ProfilesScreenContent(onOpenDrawer = openDrawer) },
             ScreenDefinition(
                 SkillsScreen,
                 R.string.screen_skills,

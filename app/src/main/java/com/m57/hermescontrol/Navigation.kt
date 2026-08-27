@@ -161,7 +161,7 @@ private fun appEntryProvider(
 fun MainNavigation(sessionId: String? = null) {
     val token by AuthManager.tokenFlow.collectAsState()
     val hasToken = !token.isNullOrBlank()
-    val startScreen: NavKey = if (hasToken) ChatScreen else LandingScreen
+    val startScreen: NavKey = if (hasToken) BotsScreen else LandingScreen
 
     val backStack = remember(startScreen) { NavBackStack(startScreen) }
     NavigationController.backStack = backStack
