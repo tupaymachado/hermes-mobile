@@ -56,6 +56,11 @@
     <string name="nav_drawer_section_configure">설정</string>
     <string name="nav_drawer_section_inspect">검사</string>
 
+    <!-- Bottom navigation tabs -->
+    <string name="nav_tab_bots">봇</string>
+    <string name="nav_tab_bot_dms">봇 DM</string>
+    <string name="nav_tab_more">더보기</string>
+
     <!-- Screen Names -->
     <string name="screen_chat">채팅</string>
     <string name="screen_skills">스킬</string>

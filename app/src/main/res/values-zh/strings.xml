@@ -61,6 +61,11 @@
     <string name="nav_drawer_section_automate">自动化</string>
     <string name="nav_drawer_section_configure">配置</string>
     <string name="nav_drawer_section_inspect">检查</string>
+
+    <!-- Bottom navigation tabs -->
+    <string name="nav_tab_bots">机器人</string>
+    <string name="nav_tab_bot_dms">机器人私信</string>
+    <string name="nav_tab_more">更多</string>
     <string name="screen_chat">对话</string>
     <string name="screen_skills">技能</string>
     <string name="screen_cron">定时任务</string>

@@ -73,6 +73,11 @@
     <string name="nav_drawer_section_configure">Configure</string>
     <string name="nav_drawer_section_inspect">Inspect</string>
 
+    <!-- Bottom navigation tabs -->
+    <string name="nav_tab_bots">Bots</string>
+    <string name="nav_tab_bot_dms">Bot DMs</string>
+    <string name="nav_tab_more">More</string>
+
     <!-- Screen Names -->
     <string name="screen_chat">Chat</string>
     <string name="screen_skills">Skills</string>

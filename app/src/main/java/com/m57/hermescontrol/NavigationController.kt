@@ -22,10 +22,18 @@ object NavigationController {
     var pendingSessionId: String? by mutableStateOf(null)
         private set
 
-    // Top-level primary screens (Chat, Skills, Cron, System, Settings)
+    /**
+     * Top-level screens: reaching one clears the stack and becomes the new root.
+     *
+     * [ChatScreen] is deliberately NOT here since the bottom-nav shell landed.
+     * A chat is reached by picking a bot, so it has to stack ON TOP of the tab
+     * you came from — as a primary screen it cleared that tab away and left
+     * back with nowhere to return to but the fallback.
+     */
     private val primaryScreens: MutableSet<NavKey> =
         mutableSetOf(
-            ChatScreen,
+            BotsScreen,
+            BotDmsScreen,
             SkillsScreen,
             CronJobsScreen,
             SystemScreen,
@@ -67,13 +75,15 @@ object NavigationController {
     /**
      * Navigate back one step, or fall back to [fallback] when the stack has only one item.
      * Never leaves the stack empty.
+     *
+     * The old "back from Chat always opens History" special case is gone with
+     * the bottom-nav shell: Chat now stacks on the tab that opened it, so a
+     * plain pop returns to that tab. Chat is only ever the ROOT on a cold start
+     * from a notification, and there [fallback] — the Bots home — is the right
+     * place to land.
      */
-    fun goBack(fallback: NavKey = ChatScreen) {
+    fun goBack(fallback: NavKey = BotsScreen) {
         val stack = backStack ?: return
-        if (stack.lastOrNull() == ChatScreen) {
-            resetTo(HistoryScreen)
-            return
-        }
         if (stack.size > 1) {
             stack.removeLastOrNull()
         } else if (stack.size == 1) {
