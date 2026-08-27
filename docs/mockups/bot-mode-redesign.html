@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hermes Mobile — Bot Mode Redesign (Mockup)</title>
+<style>
+  :root {
+    /* Spacek-inspired dark palette, adapted for Material 3 */
+    --bg-deep:        #0F1115;
+    --bg-elevated:    #161A21;
+    --bg-surface:     #1C2029;
+    --bg-surface-hi:  #242A35;
+    --bg-bubble-user: #2A3142;
+    --bg-bubble-bot:  #20262F;
+    --border-subtle:  rgba(255,255,255,0.06);
+    --border-medium:  rgba(255,255,255,0.10);
+    --text-primary:   #E8E9ED;
+    --text-secondary: #8C92A0;
+    --text-tertiary:  #5C6170;
+    --accent:         #5B8DEF;   /* Spacek-ish blue */
+    --accent-soft:    rgba(91,141,239,0.15);
+
+    /* Bot avatar colors (vibrant, Spacek-style) */
+    --bot-blue:       #5B8DEF;
+    --bot-purple:     #A66BEF;
+    --bot-green:      #4DC97A;
+    --bot-orange:     #F09160;
+    --bot-pink:       #E96BB0;
+    --bot-teal:       #4DC3CC;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #08090C;
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  h1 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .caption {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    max-width: 1200px;
+  }
+
+  .screen-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  .phone {
+    width: 360px;
+    height: 740px;
+    background: var(--bg-deep);
+    border-radius: 32px;
+    border: 1px solid var(--border-medium);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Status bar mock */
+  .status-bar {
+    height: 32px;
+    background: var(--bg-deep);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .status-bar .right { font-size: 11px; color: var(--text-secondary); }
+
+  /* Top app bar (varies per screen) */
+  .top-bar {
+    height: 56px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .top-bar .title {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .top-bar .right {
+    display: flex;
+    gap: 16px;
+    color: var(--text-secondary);
+  }
+
+  /* Main content area */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0 0;
+  }
+
+  /* Bottom nav (root navigation) */
+  .bottom-nav {
+    height: 64px;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item .icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Avatar styles */
+  .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .avatar.ring {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  .avatar.sm { width: 24px; height: 24px; font-size: 10px; }
+  .avatar.md { width: 32px; height: 32px; font-size: 12px; }
+
+  /* ──────────────────────────────── */
+  /* SCREEN 1: BOTS (home, root) */
+  /* ──────────────────────────────── */
+  .bot-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+  }
+  .bot-row:hover { background: var(--bg-surface); }
+  .bot-info { flex: 1; min-width: 0; }
+  .bot-info .name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bot-info .preview {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .bot-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .bot-meta .time { font-size: 11px; color: var(--text-tertiary); }
+  .badge-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pill {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-surface-hi);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .pill.online { background: rgba(77,201,122,0.15); color: var(--bot-green); }
+
+  .home-search {
+    padding: 12px 16px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .home-search input {
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+  }
+  .home-search input::placeholder { color: var(--text-tertiary); }
+
+  /* ──────────────────────────────── */
+  /* SCREEN 2: CHAT (destination) */
+  /* ──────────────────────────────── */
+  .chat-header {
+    height: 56px;
+    padding: 0 12px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .chat-header .back { color: var(--accent); font-size: 20px; }
+  .chat-header .name {
+    font-size: 15px;
+    font-weight: 600;
+    flex: 1;
+  }
+  .chat-header .presence {
+    font-size: 11px;
+    color: var(--bot-green);
+  }
+  .chat-header .actions { color: var(--text-secondary); display: flex; gap: 12px; }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-deep);
+  }
+
+  /* DM attribution badge (PM1) */
+  .dm-attribution {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding-left: 4px;
+  }
+
+  .bubble {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .bubble.bot {
+    background: var(--bg-bubble-bot);
+    color: var(--text-primary);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .bubble.user {
+    background: var(--bg-bubble-user);
+    color: var(--text-primary);
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .bubble-meta {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+  }
+
+  /* Tool action card (PM2-A) */
+  .tool-card {
+    align-self: center;
+    max-width: 85%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0;
+  }
+  .tool-card .icon-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .tool-card .text {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .tool-card .text strong { color: var(--text-primary); }
+
+  /* Composer (PM2-B: contextual) */
+  .composer {
+    padding: 8px 12px 12px;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .composer-input {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 6px 8px 6px 12px;
+  }
+  .composer-input textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    padding: 6px 0;
+    font-family: inherit;
+    height: 36px;
+    line-height: 1.4;
+  }
+  .composer-input textarea::placeholder { color: var(--text-tertiary); }
+  .composer-attach, .composer-send {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+  }
+  .composer-send {
+    background: var(--accent);
+    color: white;
+  }
+
+  /* ──────────────────────────────── */
+  /* SCREEN 3: ATIVIDADE (feed) */
+  /* ──────────────────────────────── */
+  .section-title {
+    padding: 16px 16px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .activity-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .activity-item .left {
+    flex-shrink: 0;
+    width: 32px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 18px;
+    padding-top: 2px;
+  }
+  .activity-item .body { flex: 1; min-width: 0; }
+  .activity-item .line1 {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .activity-item .line2 {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .activity-item .time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .activity-item .actor {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .pill-dm {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(91,141,239,0.15);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+  }
+
+  /* ──────────────────────────────── */
+  /* Footer / legend */
+  /* ──────────────────────────────── */
+  .legend {
+    margin-top: 32px;
+    max-width: 1200px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 16px;
+    background: var(--bg-elevated);
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+  }
+  .legend h3 {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .legend ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Hermes Mobile — Bot Mode Redesign</h1>
+<div class="caption">Mockup interativo · 3 telas (Bots · Chat · Atividade) · baseado nos padrões do Spacek</div>
+
+<div class="grid">
+
+  <!-- �═══════════════════════════════════ -->
+  <!-- SCREEN 1: BOTS (root home) -->
+  <!-- ════════════════════════════════════ -->
+  <div>
+    <div class="screen-label">1 · Bots (Home)</div>
+    <div class="phone">
+      <div class="status-bar"><span>21:42</span><span class="right">●●● ▮▮ 5G</span></div>
+
+      <div class="top-bar">
+        <span class="title">Bots</span>
+        <span class="right">
+          <span style="font-size:18px;">🔍</span>
+          <span style="font-size:18px;">＋</span>
+        </span>
+      </div>
+
+      <div class="content">
+        <div class="home-search">
+          <input placeholder="Search bots…" />
+        </div>
+
+        <!-- Bot: research (active, with DM) -->
+        <div class="bot-row">
+          <div class="avatar ring" style="background: var(--bot-green);">R</div>
+          <div class="bot-info">
+            <div class="name">
+              research
+              <span class="pill" style="background: rgba(91,141,239,0.15); color: var(--accent);">DM</span>
+              <span class="pill online">● online</span>
+            </div>
+            <div class="preview"><span class="actor">From Hermes:</span> Deploy ran at 14:02, status green</div>
+          </div>
+          <div class="bot-meta">
+            <span class="time">2 min</span>
+            <span class="badge-dot">3</span>
+          </div>
+        </div>
+
+        <!-- Bot: coder -->
+        <div class="bot-row">
+          <div class="avatar" style="background: var(--bot-blue);">C</div>
+          <div class="bot-info">
+            <div class="name">
+              coder
+              <span class="pill online">● online</span>
+            </div>
+            <div class="preview">Listar números de 1 a 80</div>
+          </div>
+          <div class="bot-meta"><span class="time">14 min</span></div>
+        </div>
+
+        <!-- Bot: writer -->
+        <div class="bot-row">
+          <div class="avatar" style="background: var(--bot-purple);">W</div>
+          <div class="bot-info">
+            <div class="name">writer<span class="pill">○ 2h ago</span></div>
+            <div class="preview">Draft saved to /tmp/outline.md</div>
+          </div>
+          <div class="bot-meta"><span class="time">2h</span></div>
+        </div>
+
+        <!-- Bot: researcher (offline) -->
+        <div class="bot-row">
+          <div class="avatar" style="background: var(--bot-orange);">R</div>
+          <div class="bot-info">
+            <div class="name">researcher</div>
+            <div class="preview">Last seen yesterday</div>
+          </div>
+          <div class="bot-meta"><span class="time">1d</span></div>
+        </div>
+
+        <!-- Bot: data (offline) -->
+        <div class="bot-row">
+          <div class="avatar" style="background: var(--bot-pink);">D</div>
+          <div class="bot-info">
+            <div class="name">data<span class="pill">○ offline</span></div>
+            <div class="preview">No recent activity</div>
+          </div>
+          <div class="bot-meta"><span class="time">3d</span></div>
+        </div>
+
+      </div>
+
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="icon">●</div>Bots</div>
+        <div class="nav-item"><div class="icon">○</div>Activity</div>
+        <div class="nav-item"><div class="icon">○</div>More</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- SCREEN 2: CHAT (destination) -->
+  <!-- ════════════════════════════════════ -->
+  <div>
+    <div class="screen-label">2 · Chat (com research)</div>
+    <div class="phone">
+      <div class="status-bar"><span>21:43</span><span class="right">●●● ▮▮ 5G</span></div>
+
+      <div class="chat-header">
+        <span class="back">‹</span>
+        <div class="avatar sm ring" style="background: var(--bot-green);">R</div>
+        <div>
+          <div class="name">research</div>
+          <div class="presence">● online · canonical chat</div>
+        </div>
+        <div class="actions">
+          <span style="font-size:16px;">⋯</span>
+        </div>
+      </div>
+
+      <div class="messages">
+        <!-- Bot-to-bot delivery (PM1 attribution) -->
+        <div style="max-width: 75%; align-self: flex-start;">
+          <div class="dm-attribution">
+            <div class="avatar sm" style="background: var(--bot-blue); width:18px; height:18px; font-size:9px;">H</div>
+            <span><strong style="color: var(--text-primary);">From Hermes</strong> · <span style="color: var(--text-tertiary);">@hermes</span></span>
+          </div>
+          <div class="bubble bot">
+            Deploy status: green. Last run 14:02, all services healthy. No alerts.
+          </div>
+          <div class="bubble-meta">14:01 · via DM protocol</div>
+        </div>
+
+        <!-- User message -->
+        <div style="max-width: 75%; align-self: flex-end;">
+          <div class="bubble user">Show me the deploy log for the last hour</div>
+          <div class="bubble-meta" style="text-align: right;">14:03</div>
+        </div>
+
+        <!-- Tool action card (PM2-A) -->
+        <div class="tool-card">
+          <div class="icon-circle">⏱</div>
+          <div class="text"><strong>Created routine</strong> · daily-deploy-summary · runs at 09:00</div>
+        </div>
+
+        <!-- Bot reply -->
+        <div style="max-width: 75%; align-self: flex-start;">
+          <div class="bubble bot">
+            Here's the deploy log. <strong>3 deploys</strong> in the last hour, all green. Want me to flag any non-trivial ones?
+          </div>
+          <div class="bubble-meta">14:04</div>
+        </div>
+
+        <!-- Another tool card -->
+        <div class="tool-card">
+          <div class="icon-circle">✉</div>
+          <div class="text"><strong>Sent message</strong> · to coder · "asked about the migration PR"</div>
+        </div>
+
+      </div>
+
+      <!-- Composer (PM2-B: contextual) -->
+      <div class="composer">
+        <div class="composer-input">
+          <textarea placeholder="Message research"></textarea>
+          <div class="composer-attach">＋</div>
+          <div class="composer-send">▶</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- SCREEN 3: ACTIVITY (feed) -->
+  <!-- ════════════════════════════════════ -->
+  <div>
+    <div class="screen-label">3 · Activity (feed)</div>
+    <div class="phone">
+      <div class="status-bar"><span>21:44</span><span class="right">●●● ▮▮ 5G</span></div>
+
+      <div class="top-bar">
+        <span class="title">Activity</span>
+        <span class="right">
+          <span style="font-size:18px;">⚙</span>
+        </span>
+      </div>
+
+      <div class="content">
+
+        <div class="section-title">Today</div>
+
+        <div class="activity-item">
+          <div class="left">●</div>
+          <div class="body">
+            <div class="line1"><span class="actor">coder</span> created a routine <strong>nightly-test</strong></div>
+            <div class="line2">Runs at 03:00 — checks the test suite and posts summary to your morning brief</div>
+          </div>
+          <div class="time">14m</div>
+        </div>
+
+        <div class="activity-item">
+          <div class="left">✉</div>
+          <div class="body">
+            <div class="line1"><span class="pill-dm">DM</span> <span class="actor">research</span> ↔ <span class="actor">coder</span></div>
+            <div class="line2">coder asked research about the migration PR. Got reply in 4 seconds.</div>
+          </div>
+          <div class="time">38m</div>
+        </div>
+
+        <div class="activity-item">
+          <div class="left">●</div>
+          <div class="body">
+            <div class="line1"><span class="actor">writer</span> finished a task</div>
+            <div class="line2">Draft saved to /tmp/outline.md — 1,243 words, 6 sections</div>
+          </div>
+          <div class="time">2h</div>
+        </div>
+
+        <div class="section-title">Yesterday</div>
+
+        <div class="activity-item">
+          <div class="left">�</div>
+          <div class="body">
+            <div class="line1"><span class="actor">data</span> flagged an anomaly</div>
+            <div class="line2">Disk usage on oracle-a1 at 87% — trend looks bad, may need cleanup</div>
+          </div>
+          <div class="time">1d</div>
+        </div>
+
+        <div class="activity-item">
+          <div class="left">●</div>
+          <div class="body">
+            <div class="line1"><span class="actor">research</span> replied to your message</div>
+            <div class="line2">"Deploy is green, no alerts in the last 24h. Cron jobs ran fine."</div>
+          </div>
+          <div class="time">1d</div>
+        </div>
+
+        <div class="activity-item">
+          <div class="left">＋</div>
+          <div class="body">
+            <div class="line1">You created <strong>writer</strong></div>
+            <div class="line2">Profile: claude-sonnet-4.5, custom SOUL</div>
+          </div>
+          <div class="time">1d</div>
+        </div>
+
+      </div>
+
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="icon">○</div>Bots</div>
+        <div class="nav-item active"><div class="icon">●</div>Activity</div>
+        <div class="nav-item"><div class="icon">○</div>More</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <h3>Design notes (o que mudou e por quê)</h3>
+  <ul>
+    <li><strong>Bots como home:</strong> substituir o Chat como start destination. Tu abre o app e vê teus bots, não uma tela de menu.</li>
+    <li><strong>Bot = contato (Telegram-style):</strong> cada linha tem avatar, nome, presença (online/offline), última mensagem de QUALQUER autor (não só user), badge de não-lido, e timestamp. Ring azul no bot ativo (PM2-D).</li>
+    <li><strong>Chat é destino, não menu:</strong> tap num bot → empurra a tela de chat. Composer contextual "Message research" (PM2-B). Bot-to-bot deliveries aparecem com badge "From Hermes" no topo (PM1). Tool cards inline tipo "Created routine" (PM2-A).</li>
+    <li><strong>Atividade como feed:</strong> substitui Bot DMs como home secundária. Funde "o que rolou" entre bots + cron + tuas sessões recentes, num feed cronológico com autor destacado.</li>
+    <li><strong>"Mais" mantém o drawer antigo:</strong> 24 telas (Cron, Files, Analytics, Kanban, Settings, etc) continuam acessíveis, mas competem com bots pela atenção. Bot DMs screen vai pra dentro do "Mais" como item "Bot DMs (archive)" — visualizador passivo.</li>
+    <li><strong>Inspirado no Spacek:</strong> paleta escura profunda, avatares coloridos vibrantes, hierarquia clara. Adaptei o que faz sentido pra mobile (bottom nav em vez de sidebar).</li>
+    <li><strong>Group chat (PM3) não incluído:</strong> próxima campanha depois de validar essa reorganização.</li>
+  </ul>
+</div>
+
+</body>
+</html>

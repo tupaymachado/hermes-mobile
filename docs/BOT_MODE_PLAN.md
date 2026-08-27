@@ -2,7 +2,7 @@
 
 > Repo: `tupaymachado/hermes-mobile` (fork de `hermes-agent/hermes-mobile`)
 > Validação inicial: 24/ago/2026 contra gateway Hermes v0.20.5 vivo na tailnet (100.101.230.70:9119).
-> Atualizado em: 27/ago/2026, após merge do PR #7 (PM2 PR1 — A/B/D).
+> Atualizado em: 27/ago/2026, após o pivô de navegação (bottom nav) na branch `feat/bottom-nav-bot-mode`.
 
 ## TL;DR
 
@@ -10,7 +10,8 @@
 - **Pós-MVP em curso**:
   - ✅ PM1 — bot-to-bot DMs legíveis (PR #6)
   - ✅ PM2 PR1 — polish visual A/B/D (Spacek-inspired) (PR #7)
-  - ⏳ **PM2 PR2 — drawer lateral swipeable (E)**, adiado por risco de gesture ownership. É a próxima frente.
+  - ❌ **PM2 PR2 (drawer swipeable E) — CANCELADO**. Substituído pelo pivô de navegação abaixo.
+  - ⏳ **PM7 — bottom nav (Bots / Activity / More)**, branch `feat/bottom-nav-bot-mode`. Casca + feed implementados, PR por abrir.
   - 📋 PM3-PM6 — roadmap documentado, sem ação imediata.
 - **Mapeamento conceitual**: um *bot* = um `ProfileInfo` server-side (não o `ConnectionProfile` local). Bot Mode vive sobre `AuthManager.activeProfileId`.
 
@@ -27,7 +28,8 @@
 | ago/2026 | Fase 4 | `chore/bot-mode-polish` | Presence ao vivo, erro por bot ≠ roster partido, a11y, i18n completa |
 | ago/2026 | PM1 | `feat/bot-dms-visible` | Bot-to-bot DMs renderizadas com badge de autor |
 | ago/2026 | PM2 PR1 | `feat/bot-mode-visual-polish` (PR #7) | `ToolActionCard` (A) + composer contextual (B) + avatar ring/saturação (D) |
-| _próximo_ | **PM2 PR2** | _a abrir_ | **Drawer lateral swipeable (E)** |
+| ago/2026 | ~~PM2 PR2~~ | — | **Cancelado** — drawer swipeable (E) substituído pelo bottom nav |
+| ago/2026 | **PM7** | `feat/bottom-nav-bot-mode` | Bottom nav (Bots / Activity / More) + feed de Activity |
 | _futuro_ | PM3-PM6 | — | Group chat, @autocomplete, multi-source roster, avatares IA |
 
 ---
@@ -51,7 +53,7 @@
 
 **Invariante de UX (Fase 4, ainda vale):** o monograma do `BotAvatar` **nunca** vira semantics. Identidade vem do nome adjacente. O ring do avatar ativo (PM2 D) também **não** vira semantics — só decoração.
 
-**Invariante de arquitetura (AGENTS.md, ainda vale):** drawer gesture é **screen-owned** (`HermesScaffold(drawerGesturesEnabled = ...)`). O PM2 PR2 (drawer de bots) vai ter que declarar quais telas podem ativar o gesto de bots sem brigar com o drawer raiz do menu.
+**Invariante de arquitetura (AGENTS.md, ainda vale):** drawer gesture é **screen-owned** (`HermesScaffold(drawerGesturesEnabled = ...)`). O bottom nav (PM7) **não toca nisso**: a barra é hospedada pelo `Scaffold` do `MainNavigation`, o drawer raiz continua sendo o único dono da borda esquerda, e nenhuma tela mudou sua preferência de gesto.
 
 ---
 
@@ -112,43 +114,84 @@
 
 ---
 
-## 3. Pendente (próxima frente)
+## 3. PM7 — Pivô de navegação: bottom nav ⏳
 
-### 3.1 PM2 PR2 — Drawer lateral swipeable (E) ⏳
+> Decidido em 27/ago/2026. **Substitui** o PM2 PR2 (drawer swipeable E), que foi cancelado.
+> Branch `feat/bottom-nav-bot-mode`, PR por abrir. Referência visual: [docs/mockups/bot-mode-redesign.html](mockups/bot-mode-redesign.html).
 
-> Adiado do PR #7 por risco de gesture ownership. É o **único item pendente** com trabalho já desenhado.
+### 3.1 Por que o drawer (E) morreu
 
-**Inspiração:** Spacek. Complementa (não substitui) o `BotSwitcherSheet` da Fase 3, que continua sendo o caminho rápido pelo título.
+O item E foi adiado duas vezes pelo mesmo motivo — **gesture ownership**: o `ModalNavigationDrawer` raiz já
+possui a borda esquerda, e um segundo drawer de bots teria de arbitrar o gesto com ele (opção (a)) ou sequestrar
+o menu dentro do `ChatScreen` (opção (b)). O bottom nav **elimina** a disputa em vez de arbitrá-la: os bots
+ganham uma âncora permanente na barra e o drawer raiz continua sendo o único dono da borda.
 
-**Comportamento:**
-- **Abrir:** swipe da borda esquerda pra direita (gesto padrão Material 3) **ou** tap no avatar/bot-name no header do chat.
-- **Fechar:** tap no scrim, swipe pra esquerda, ou tap no bot selecionado (que também navega pro chat dele — duplo papel).
-- **Conteúdo:** lista de bots igual à `BotRosterRow`, com o ativo destacado pelo ring (D do PR1).
-- **Persistente sobre o chat:** o usuário volta exatamente onde estava.
+O `BotSwitcherSheet` da Fase 3 (chip no título do chat) continua vivo e continua sendo o caminho rápido de
+troca **dentro** do chat — a barra não o substitui, porque a barra não aparece no `ChatScreen`.
 
-**Escopo técnico:**
-- Componente `BotSwitcherDrawer` (`ModalNavigationDrawer` ou `AnchoredDraggable` do Material 3).
-- Integrar com `DrawerGestureController` (já existe — AGENTS.md exige screen-owned): declarar quais telas podem ativar o drawer de bots (Converse: Bots, Bot DMs, Chat → `true`; sub-pages → `false`).
-- Tap no bot = switch via `BotsViewModel.selectBot()` + fecha drawer.
-- Avatar no header do chat vira o trigger secundário.
-- **Reuso, não duplicação:** mesmo `BotRosterItem` + `BotsViewModel` da `BotSwitcherSheet`.
+### 3.2 O que foi implementado
 
-**Caveat arquitetural — decidir antes de codar:**
-- `ModalNavigationDrawer` raiz do Hermes já existe pro menu principal. Ou:
-  - **(a) Segundo drawer empilhado** — mais complexo, dois gestures disputando a borda esquerda;
-  - **(b) Substituir `NavIcon.Menu` no header do Chat por `NavIcon.Bots`** — drawer de bots vira o menu do chat, drawer raiz só aparece em outras telas.
-- Recomendo **(b)** no `ChatScreen` (escopo confinado, sem interferência no resto). Decisão a confirmar antes de codar.
+**Commit 1 — casca de navegação** (`HermesBottomBar.kt`)
+- 3 abas: **Bots** → `BotsScreen`, **Activity** → `ActivityScreen`, **More** → abre o drawer raiz.
+  "More" **não é destino**: `BottomNavTab.key = null` e o clique chama `openDrawer()`. As ~24 telas ficam
+  exatamente onde estavam.
+- Duas regras puras, unit-testadas sem emulador (`BottomNavTest`):
+  - `BottomNav.isVisibleOn(screen)` — a barra vive em telas top-level. **Esconde no `ChatScreen`** (o composer
+    fica com a altura toda) e some nas drill-downs, que não estão em `ScreenRegistry.ALL_SCREENS` — a regra não
+    apodrece quando a próxima sub-página nascer.
+  - `BottomNav.selectedOn(screen)` — tudo que não é aba lê como **More**, que é exatamente o que a aba significa.
+- A barra é hospedada **uma vez** pelo `Scaffold` do `MainNavigation`, não por tela: `HermesScaffold` fica
+  intocado e a barra não some numa tela nova nem duplica numa antiga.
+- **Chat vira destino, não aba:** saiu de `primaryScreens`, então empilha **sobre** a aba que o abriu. O
+  `goBack` perdeu o caso especial "voltar do Chat abre History" — um pop normal devolve a aba. Chat só é raiz em
+  cold start de notificação, e aí o fallback (Bots) é o lugar certo. Login também passou a cair em `BotsScreen`.
+- `BotsScreen` e `ActivityScreen` saíram do drawer (`drawerSection = null`): são abas, uma entrada duplicada
+  seria só uma segunda porta pro mesmo cômodo. `BotDmsScreen` **fica** no drawer como arquivo passivo (PM1).
 
-**Arquivos prováveis:** novo `ui/bots/components/BotSwitcherDrawer.kt`, mudanças em `ChatScreen` (header trigger), `HermesScaffold` (gesture opt-in por tela — provavelmente já é opt-in por `drawerGesturesEnabled`, validar), `BotsViewModel` (reuso).
+**Commit 2 — feed de Activity** (`ui/activity/`)
+- `ActivityItem.kt` — núcleo puro: `botActivity()` (fan-out de um bot → linhas), `routineActivity()`,
+  `mergeActivity()`, `bucketOf()` (Hoje/Ontem/Anteriores/Sem data, no fuso do **viewer**) e `parseTimestamp()`
+  (epoch numérico ou ISO-8601). 22 testes unitários.
+- `ActivityViewModel` — mesma forma de carga do roster e do Bot DMs: profiles + active em paralelo, scan por bot
+  do chat canônico (`limit=20&role=user&order=latest`), **mais uma** chamada de cron. **2N+3 requests**, teto de
+  12 bots concorrentes. `refreshOnChange(setOf(SESSIONS, CRON))` — um coletor só, um guard só.
+- **Política de falha:** só `getProfiles` é fatal. Bot que falha vai pra `unscannedBots`; cron que falha liga
+  `routinesUnavailable`. Ambos aparecem como rodapé na tela — feed parcial que se declara bate tela de erro.
 
-**Estimativa:** ~3 dias · 1 PR. Risco médio (gesture ownership é delicado — tem que coexistir com o menu principal sem brigar pelo gesto da borda).
+### 3.3 Desvios deliberados do mockup
 
-**Validação esperada:** build verde, ktlint limpo, testes instrumentados cobrindo (1) abrir por gesto, (2) abrir por tap no avatar, (3) fechar por scrim, (4) fechar por tap no bot selecionado, (5) coexistência com menu raiz fora do `ChatScreen`.
+O mockup pede linhas como *"writer finished a task"* e *"data flagged an anomaly"*. **Não implementadas de
+propósito:** a API expõe mensagens e execuções de cron, não intenção. Um feed que adivinha semântica a partir do
+texto da mensagem erra com confiança no primeiro bot sarcástico. Os três `ActivityKind` existentes são o que o
+gateway de facto reporta:
 
-### 3.2 Decisão aberta antes do PR2
-- **(a)** segundo drawer empilhado vs **(b)** substituir menu no header do ChatScreen. Recomendo (b).
+| Kind | Fonte | Linha |
+|---|---|---|
+| `BOT_DM` | prefixo `Message from 🤖 X (@x):` no chat canônico (PM1) | "Hermes messaged research" |
+| `USER_PROMPT` | turno `role=user` mais recente que **não** é DM | "You messaged coder" |
+| `ROUTINE_RUN` | `last_run_at` / `last_run_status` do cron | "nightly-test ran" / "… failed" |
 
----
+Outros limites, declarados em vez de escondidos:
+- Só o chat **canônico** de cada bot é escaneado (`O(bots)`, não `O(sessions)`) — atividade em threads
+  não-canônicas ou fora da janela de 20 turnos não lista. É uma visão de "o que está rolando", não auditoria.
+- Sem `role=assistant` na varredura: "o bot respondeu" custaria uma segunda página por bot. Ficou de fora do
+  primeiro corte.
+- Máx. 5 DMs por bot no feed e teto de 60 linhas — um par de bots tagarela não pode empurrar os outros pra fora.
+
+### 3.4 Validação
+
+Build verde (`compileDebugKotlin`, `compileDebugAndroidTestKotlin`), **1218 testes unitários** verdes, ktlint
+limpo. Instrumentados (`ActivityFeedListTest`, 4 casos com `now` fixo) compilam mas **não rodaram local** — não
+há emulador nesta máquina; quem valida é o job `instrumented-tests` do CI.
+
+### 3.5 Aberto / próximo
+
+- Abrir o PR e deixar o CI rodar os instrumentados.
+- **Não testado contra o gateway vivo** (100.101.230.70:9119) — o feed precisa de um smoke test com bots reais,
+  sobretudo o formato de `last_run_at` do cron, que `parseTimestamp()` cobre em duas formas mas não em todas.
+- Reavaliar `BotDmsScreen`: com o Activity agregando DMs, ele vira redundante. Fica no drawer como arquivo até
+  o feed provar que cobre o caso.
+
 
 ## 4. Roadmap (PM3-PM6) — sem ação imediata
 
@@ -187,10 +230,11 @@ Desktop usa `image.generate` RPC pra criar avatares. Backend não expõe campo d
 ## 5. Ordem sugerida
 
 ```
-AGORA:   PM2 PR2 (drawer E)     ~3d
-↓ depois: PM4 (autocomplete)     ~1-2d   — reavalia se PM1 ainda faz sentido como "arquivo"
+AGORA:   PM7 (bottom nav)       — código pronto, falta PR + smoke test no gateway vivo
+↓ depois: PM4 (autocomplete)     ~1-2d   — reavalia se BotDmsScreen ainda faz sentido como "arquivo"
 ↓ depois: PM3 (group chat)       ~2-3 sem — fatiável a→b→c→d
-adiados: PM5, PM6
+cancelado: PM2 PR2 (drawer E)
+adiados:   PM5, PM6
 ```
 
 PM4 depende funcionalmente de PM1/PM3 (precisa de contexto onde mencionar). PM3 é o único grande e pode ser fatiado.
@@ -203,7 +247,8 @@ PM4 depende funcionalmente de PM1/PM3 (precisa de contexto onde mencionar). PM3 
 2. **Pin como marcador durável** colide com pin manual do utilizador em `SessionsScreen` (`togglePin`). Despinar o canonical perde só o *fallback* cross-device — o mapa local continua. Aceitável no MVP; vale um aviso no `SessionsScreen` numa iteração futura.
 3. **`ChatViewModel` é o ponto quente** (3.352 linhas, máquina de generations/resume). Alteração do MVP é deliberadamente um só `if` reutilizando o caminho `initialSessionId` já existente. Qualquer refactor maior da lógica de resume fica fora deste escopo.
 4. **Avatar = monograma determinístico** (4 slots de paleta do `colorScheme`). Para avatares reais, o backend não expõe campo — exigiria mudança server-side (PM6).
-5. **Gesture ownership** (PM2 PR2): o `ModalNavigationDrawer` raiz do Hermes já existe pro menu principal. A coexistência com o drawer de bots é o ponto de risco do PR2. Decidir **(a)** drawer empilhado vs **(b)** substituir menu no ChatScreen antes de codar.
+5. ✅ **Gesture ownership — resolvido por eliminação** (PM7): o bottom nav dispensou o segundo drawer, então não há dois donos da borda esquerda. O risco que adiou o item E duas vezes deixou de existir em vez de ser arbitrado.
+5b. **Custo do feed de Activity: 2N+3 requests** por carga (roster 2N+1 + cron). Mesma ordem do roster e do Bot DMs, mas as três telas podem recarregar juntas num burst de `sessions.changed`. Aceitável para N < ~15; acima disso vale um cache partilhado do scan por bot.
 6. **`session.create` não persiste até o 1º prompt** (`sessionHasServerPresence`) — pin do canonical continua tendo de ser diferido (Fase 0 → 2). Vale pra qualquer novo caller que criar sessões.
 7. **Confirmado fora de escopo até segunda ordem:** routines pane completo (PM2 A cobriu o caso "tool com side effect", mas um painel de rotinas é outra conversa), group chat, multi-source roster, avatares IA.
 
