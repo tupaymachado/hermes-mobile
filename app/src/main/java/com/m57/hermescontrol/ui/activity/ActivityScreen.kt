@@ -73,15 +73,22 @@ fun ActivityScreen(
         // pre-applied it in its own Box (the padding foot-gun in AGENTS.md).
         // The transient states below DO take it, per that same rule.
         Column(modifier = Modifier.fillMaxSize()) {
+            // Every branch takes weight(1f), the gap notes below take what is
+            // left. Without it the transient states — which all fill their
+            // parent — eat the whole column and push the notes off-screen,
+            // which is exactly when they matter most: every bot failing to
+            // scan would render an empty feed reading "Nothing yet".
             when {
                 state.isLoading && state.items.isEmpty() ->
-                    SkeletonListState(modifier = Modifier.padding(paddingValues))
+                    SkeletonListState(
+                        modifier = Modifier.weight(1f).padding(paddingValues),
+                    )
 
                 state.errorMessage != null && state.items.isEmpty() ->
                     ErrorState(
                         message = state.errorMessage ?: "",
                         onRetry = { viewModel.loadFeed() },
-                        modifier = Modifier.padding(paddingValues),
+                        modifier = Modifier.weight(1f).padding(paddingValues),
                     )
 
                 state.items.isEmpty() ->
@@ -89,7 +96,7 @@ fun ActivityScreen(
                         title = stringResource(R.string.activity_empty_title),
                         subtitle = stringResource(R.string.activity_empty_desc),
                         icon = Icons.Filled.Bolt,
-                        modifier = Modifier.padding(paddingValues),
+                        modifier = Modifier.weight(1f).padding(paddingValues),
                     )
 
                 else ->
