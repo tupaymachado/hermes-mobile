@@ -11,7 +11,6 @@ import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.safeApiCall
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.ChangeEvents
-import com.m57.hermescontrol.ui.bots.flatText
 import com.m57.hermescontrol.ui.common.ToastHost
 import com.m57.hermescontrol.ui.common.refreshOnChange
 import kotlinx.coroutines.CoroutineDispatcher
@@ -239,12 +238,10 @@ class ActivityViewModel(
             return BotScan(name = name, items = emptyList(), failed = true)
         }
 
-        val turns =
-            messagesResult.data.messages.mapNotNull { message ->
-                message.content?.flatText()?.let { text ->
-                    ActivityTurn(text = text, timestamp = parseTimestamp(message.timestampText))
-                }
-            }
+        // `role=user` is what the request asked for, but it is NOT the same
+        // question as "what the human said": timeline markers ride that role
+        // too, and [activityTurns] is where they are dropped (issue #904).
+        val turns = activityTurns(messagesResult.data.messages)
         return BotScan(
             name = name,
             items =

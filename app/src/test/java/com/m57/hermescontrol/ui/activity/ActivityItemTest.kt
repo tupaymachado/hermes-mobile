@@ -1,11 +1,15 @@
 package com.m57.hermescontrol.ui.activity
 
+import com.m57.hermescontrol.data.model.SessionMessage
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 
 /**
@@ -115,6 +119,105 @@ class ActivityItemTest {
         assertEquals("draft saved to /tmp", items.single().body)
     }
 
+    @Test
+    fun `two bots sharing one session id still produce unique row keys`() {
+        // A gateway that ignores `?profile=` hands every bot the SAME newest
+        // session. The feed is then wrong, but it must degrade — the list keys
+        // rows by id, and a duplicate key throws.
+        val turns =
+            listOf(
+                ActivityTurn("Message from Hermes: ping", 10.0),
+                ActivityTurn("what is up", 20.0),
+            )
+
+        val ids =
+            (botActivity("research", "shared", null, turns) + botActivity("coder", "shared", null, turns))
+                .map { it.id }
+
+        assertEquals("no id repeats across bots", ids.size, ids.distinct().size)
+    }
+
+    @Test
+    fun `a delivery keeps its key as the scan window slides`() {
+        val first = ActivityTurn("Message from Hermes: ping", 10.0, messageId = 41)
+        val second = ActivityTurn("Message from Hermes: pong", 20.0, messageId = 42)
+
+        val before = botActivity("research", "s8", null, listOf(first))
+        val after = botActivity("research", "s8", null, listOf(first, second))
+
+        // The window index would renumber `first` on every new turn, churning
+        // the list's keys for a message that has not changed.
+        assertEquals(before.single().id, after.first().id)
+    }
+
+    @Test
+    fun `a backend without message ids still keys deliveries by their stamp`() {
+        // Same stamp on two deliveries: the counter is what keeps them apart.
+        val turns =
+            listOf(
+                ActivityTurn("Message from Hermes: one", 10.0),
+                ActivityTurn("Message from Hermes: two", 10.0),
+            )
+
+        val ids = botActivity("research", "s9", null, turns).map { it.id }
+
+        assertEquals(2, ids.distinct().size)
+        assertEquals(ids, botActivity("research", "s9", null, turns).map { it.id })
+    }
+
+    // ── activityTurns ─────────────────────────────────────────────────────
+
+    @Test
+    fun `timeline markers are not user turns`() {
+        // model_switch and friends ride on role=user (issue #904), so the
+        // scanned page contains them even though the request asked for the
+        // human's turns.
+        val turns =
+            activityTurns(
+                listOf(
+                    userMessage(id = 1, text = "deploy the thing"),
+                    userMessage(id = 2, text = "Switched model to opus", displayKind = "model_switch"),
+                ),
+            )
+
+        assertEquals(listOf("deploy the thing"), turns.map { it.text })
+    }
+
+    @Test
+    fun `switching a bot's model does not evict the real prompt`() {
+        val items =
+            botActivity(
+                botName = "coder",
+                sessionId = "s10",
+                sessionStartedAt = null,
+                turns =
+                    activityTurns(
+                        listOf(
+                            userMessage(id = 1, text = "deploy the thing", stamp = "10"),
+                            userMessage(
+                                id = 2,
+                                text = "Switched model to opus",
+                                stamp = "20",
+                                displayKind = "model_switch",
+                            ),
+                        ),
+                    ),
+            )
+
+        // Unfiltered, the marker became a "You messaged coder" row AND pushed
+        // the actual prompt out, since only the newest non-delivery survives.
+        assertEquals(1, items.size)
+        assertEquals("deploy the thing", items.single().body)
+    }
+
+    @Test
+    fun `scanned turns carry the gateway's message id and stamp`() {
+        val turn = activityTurns(listOf(userMessage(id = 7, text = "hello", stamp = "1700000000"))).single()
+
+        assertEquals(7, turn.messageId)
+        assertEquals(1700000000.0, turn.timestamp!!, 0.001)
+    }
+
     // ── routineActivity ───────────────────────────────────────────────────
 
     @Test
@@ -147,9 +250,32 @@ class ActivityItemTest {
     @Test
     fun `a routine that never ran produces nothing`() {
         assertNull(routineActivity("job3", "unused", null, null, "Runs at 09:00"))
-        // An unparseable stamp is the same case: an undated "it ran, sometime"
-        // row would sit at the bottom of the feed forever.
-        assertNull(routineActivity("job4", "unused", "whenever", "ok", null))
+        assertNull(routineActivity("job3b", "unused", "   ", null, null))
+    }
+
+    @Test
+    fun `the live gateway's offset stamp becomes a routine row`() {
+        // Verbatim from GET /api/cron/jobs: ISO-8601 with a numeric offset,
+        // which is NOT what Instant.parse accepts on a Java 8-era java.time.
+        val item = routineActivity("job6", "nightly-test", "2026-08-27T08:01:07.850223-03:00", "ok", "Runs at 08:00")!!
+
+        assertEquals(
+            Instant.parse("2026-08-27T11:01:07Z").epochSecond.toDouble(),
+            item.timestamp!!,
+            0.001,
+        )
+        assertFalse(item.failed)
+    }
+
+    @Test
+    fun `a run with an unreadable stamp is undated, not dropped`() {
+        val item = routineActivity("job4", "mystery", "whenever", "ok", "Runs at 09:00")!!
+
+        // The run happened — only its clock is unreadable, so the row files
+        // under "undated" at the bottom instead of disappearing silently.
+        assertNull(item.timestamp)
+        assertEquals(ActivityBucket.UNDATED, bucketOf(item.timestamp))
+        assertEquals("Runs at 09:00", item.body)
     }
 
     @Test
@@ -173,10 +299,53 @@ class ActivityItemTest {
     }
 
     @Test
+    fun `an ISO stamp with a numeric offset parses to the same instant`() {
+        // The exact shape GET /api/cron/jobs returns for last_run_at. This
+        // suite runs on a modern JDK, where Instant.parse would have taken it
+        // too; API 26's java.time (Java 8 semantics) would not, which is why
+        // the parser leads with OffsetDateTime instead.
+        assertEquals(
+            OffsetDateTime.parse("2026-08-27T08:01:07.850223-03:00").toEpochSecond().toDouble(),
+            parseTimestamp("2026-08-27T08:01:07.850223-03:00")!!,
+            0.001,
+        )
+        assertEquals(
+            Instant.parse("2026-08-27T11:01:07Z").epochSecond.toDouble(),
+            parseTimestamp("2026-08-27T08:01:07.850223-03:00")!!,
+            0.001,
+        )
+        assertEquals(
+            Instant.parse("2026-08-27T11:01:00Z").epochSecond.toDouble(),
+            parseTimestamp("2026-08-27T08:01-03:00")!!,
+            0.001,
+        )
+    }
+
+    @Test
+    fun `an ISO stamp with no zone is read in the device's own zone`() {
+        // `datetime.isoformat()` on a naive datetime — the gateway's clock is
+        // the only one on offer, and it is the zone the day buckets use.
+        val local = LocalDateTime.of(2026, 8, 27, 8, 1, 7)
+
+        assertEquals(
+            local.atZone(ZoneId.systemDefault()).toEpochSecond().toDouble(),
+            parseTimestamp("2026-08-27T08:01:07")!!,
+            0.001,
+        )
+        assertEquals(
+            local.atZone(ZoneId.systemDefault()).toEpochSecond().toDouble(),
+            parseTimestamp("2026-08-27T08:01:07.850223")!!,
+            0.001,
+        )
+    }
+
+    @Test
     fun `unusable timestamps are null, never an exception`() {
         assertNull(parseTimestamp(null))
         assertNull(parseTimestamp(""))
+        assertNull(parseTimestamp("   "))
         assertNull(parseTimestamp("last tuesday"))
+        assertNull(parseTimestamp("2026-13-45T99:99:99Z"))
         assertNull(parseTimestamp("0"))
     }
 
@@ -203,6 +372,16 @@ class ActivityItemTest {
 
         assertEquals(10, merged.size)
         assertEquals("the cap keeps the newest", "r100", merged.first().id)
+    }
+
+    @Test
+    fun `merge cannot emit a duplicate key`() {
+        // Belt and braces for the list's `key = { it.id }`: whatever a source
+        // contributes, the feed handed to the UI has distinct ids.
+        val merged = mergeActivity(listOf(row("dup", 100.0), row("dup", 300.0)))
+
+        assertEquals(1, merged.size)
+        assertEquals("the survivor is the newest", 300.0, merged.single().timestamp!!, 0.001)
     }
 
     // ── bucketOf ──────────────────────────────────────────────────────────
@@ -237,6 +416,19 @@ class ActivityItemTest {
         // header contradicting the row right under it.
         assertEquals(ActivityBucket.TODAY, bucketOf(tomorrow, now, ZoneId.of("UTC")))
     }
+
+    private fun userMessage(
+        id: Int,
+        text: String,
+        stamp: String? = null,
+        displayKind: String? = null,
+    ) = SessionMessage(
+        id = id,
+        role = "user",
+        content = JsonPrimitive(text),
+        timestamp = stamp?.let { JsonPrimitive(it) },
+        display_kind = displayKind,
+    )
 
     private fun row(
         id: String,

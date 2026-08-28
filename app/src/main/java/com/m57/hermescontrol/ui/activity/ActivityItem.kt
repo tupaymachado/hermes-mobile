@@ -1,8 +1,12 @@
 package com.m57.hermescontrol.ui.activity
 
+import com.m57.hermescontrol.data.model.SessionMessage
 import com.m57.hermescontrol.data.session.BotDmAttribution
+import com.m57.hermescontrol.ui.bots.flatText
 import com.m57.hermescontrol.ui.bots.oneLine
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
@@ -36,7 +40,12 @@ enum class ActivityKind {
  * follows for a missing last message).
  */
 data class ActivityItem(
-    /** Stable list key. Unique per (source, session/job, position). */
+    /**
+     * Stable list key, and unique across the WHOLE feed — the list keys rows
+     * by it, so a collision is a crash, not a cosmetic glitch. Session ids are
+     * not enough on their own: a gateway that ignores `?profile=` hands every
+     * bot the same session, and the feed must degrade, not die.
+     */
     val id: String,
     val kind: ActivityKind,
     /** The bot or routine the row is ABOUT. */
@@ -61,7 +70,38 @@ data class ActivityItem(
 data class ActivityTurn(
     val text: String,
     val timestamp: Double? = null,
+    /**
+     * The gateway's message row id — stable and never reused (issue #859), so
+     * it is the row key when present. Null on backends that omit it.
+     */
+    val messageId: Int? = null,
 )
+
+/**
+ * Maps one scanned page of `role=user` rows to feed turns.
+ *
+ * Timeline markers (`display_kind`: `model_switch`, `personality_switch`,
+ * `auto_continue`) ride on the user role so strict providers accept them
+ * mid-conversation, but they are NOT things the human typed (issue #904) —
+ * the chat renders them as centered chips for that same reason, and
+ * [com.m57.hermescontrol.ui.chat.asBotDm] refuses them as deliveries.
+ *
+ * Letting them through here costs twice: switching a bot's model — an everyday
+ * action — posts a false "You messaged coder" row carrying the marker's text,
+ * AND evicts the real prompt, since only the newest non-delivery turn survives
+ * [botActivity].
+ */
+internal fun activityTurns(messages: List<SessionMessage>): List<ActivityTurn> =
+    messages.mapNotNull { message ->
+        if (!message.display_kind.isNullOrBlank()) return@mapNotNull null
+        message.content?.flatText()?.let { text ->
+            ActivityTurn(
+                text = text,
+                timestamp = parseTimestamp(message.timestampText),
+                messageId = message.id,
+            )
+        }
+    }
 
 /** Day bucket a row is filed under. */
 enum class ActivityBucket {
@@ -98,14 +138,18 @@ internal fun botActivity(
 ): List<ActivityItem> {
     val deliveries = mutableListOf<ActivityItem>()
     var newestPrompt: ActivityItem? = null
+    val keys = stableTurnKeys(turns)
 
+    // Row ids are scoped by BOT and not by session alone: profile names are
+    // unique, where session ids are only unique on a gateway that honours
+    // `?profile=` (see [ActivityItem.id]).
     turns.forEachIndexed { index, turn ->
         val attribution = BotDmAttribution.parse(turn.text)
         val at = turn.timestamp ?: sessionStartedAt
         if (attribution != null) {
             deliveries +=
                 ActivityItem(
-                    id = "dm:$sessionId:$index",
+                    id = "dm:$botName:$sessionId:${keys[index]}",
                     kind = ActivityKind.BOT_DM,
                     actor = botName,
                     counterpart = attribution.displayName,
@@ -121,7 +165,7 @@ internal fun botActivity(
             if (body.isNotEmpty()) {
                 newestPrompt =
                     ActivityItem(
-                        id = "prompt:$sessionId",
+                        id = "prompt:$botName:$sessionId",
                         kind = ActivityKind.USER_PROMPT,
                         actor = botName,
                         body = body,
@@ -137,9 +181,45 @@ internal fun botActivity(
 }
 
 /**
- * Builds the row for a routine's last run, or null when it never ran (or the
- * backend's stamp is unparseable — an undated "it ran, sometime" row would
- * float to the bottom of the feed forever).
+ * Identity of each scanned turn, positionally aligned with [turns].
+ *
+ * The gateway's message row id is stable and never reused (issue #859), so it
+ * wins whenever the backend sends one. Failing that, the stamp plus a counter
+ * over the turns sharing it is still stable as the 20-turn window slides, and
+ * still unique within the thread — the window INDEX is neither: every new turn
+ * renumbers the same logical message and churns the list's keys.
+ *
+ * The prefixes (`m`/`t`/`i`) keep the three schemes from colliding on a
+ * backend that mixes them.
+ */
+private fun stableTurnKeys(turns: List<ActivityTurn>): List<String> {
+    val seenAtStamp = mutableMapOf<Long, Int>()
+    return turns.mapIndexed { index, turn ->
+        val stamp = turn.timestamp?.toLong()
+        when {
+            turn.messageId != null -> "m${turn.messageId}"
+            stamp != null -> {
+                val seq = seenAtStamp.getOrElse(stamp) { 0 }
+                seenAtStamp[stamp] = seq + 1
+                "t$stamp#$seq"
+            }
+
+            else -> "i$index"
+        }
+    }
+}
+
+/**
+ * Builds the row for a routine's last run, or null when it never ran — no
+ * stamp at all is the gateway saying the job has not fired, and a row claiming
+ * otherwise would be an invention.
+ *
+ * A stamp that IS there but does not parse is the opposite case: the run
+ * happened, only its clock is unreadable. That row stands, undated, and files
+ * under [ActivityBucket.UNDATED] at the bottom of the feed — the same "degrade
+ * the row, never drop it" rule [ActivityItem.timestamp] states. Dropping it
+ * made a date format this app had not met yet look like a routine that never
+ * ran, silently.
  */
 internal fun routineActivity(
     jobId: String,
@@ -148,10 +228,11 @@ internal fun routineActivity(
     lastRunStatus: String?,
     scheduleDisplay: String?,
 ): ActivityItem? {
-    val at = parseTimestamp(lastRunAt) ?: return null
+    if (lastRunAt.isNullOrBlank()) return null
+    val at = parseTimestamp(lastRunAt)
     val status = lastRunStatus?.trim()?.lowercase()
     return ActivityItem(
-        id = "cron:$jobId:${at.toLong()}",
+        id = "cron:$jobId:${at?.toLong() ?: "undated"}",
         kind = ActivityKind.ROUTINE_RUN,
         actor = name,
         body = scheduleDisplay?.oneLine().orEmpty(),
@@ -177,7 +258,12 @@ internal fun mergeActivity(
         .sortedWith(
             compareByDescending<ActivityItem> { it.timestamp != null }
                 .thenByDescending { it.timestamp ?: 0.0 },
-        ).take(limit)
+        )
+        // Ids are unique by construction above; this is the guarantee that the
+        // list's `key = { it.id }` can never throw, whatever a future source
+        // starts contributing. Sorted first, so the survivor is the newest.
+        .distinctBy { it.id }
+        .take(limit)
 
 /**
  * Files a row under a day bucket, in the VIEWER's timezone — "today" is a
@@ -207,18 +293,29 @@ internal fun bucketOf(
 }
 
 /**
- * Parses the assorted stamps the gateway sends: epoch seconds as a number or
- * a string, or an ISO-8601 instant. Anything else is null, never an exception.
+ * Parses the assorted stamps the gateway sends: epoch seconds as a number or a
+ * string, and ISO-8601 with a numeric offset, with `Z`, or with no zone at all.
+ * Anything else is null, never an exception.
  */
 internal fun parseTimestamp(raw: String?): Double? {
     val text = raw?.trim().orEmpty()
     if (text.isEmpty()) return null
     text.toDoubleOrNull()?.let { return it.takeIf { seconds -> seconds > 0.0 } }
-    return try {
-        Instant.parse(text).epochSecond.toDouble()
-    } catch (_: Exception) {
-        null
-    }
+    // OffsetDateTime FIRST, and not Instant.parse: the live gateway sends
+    // `2026-08-27T08:01:07.850223-03:00` for cron runs, and Instant.parse only
+    // accepts a non-`Z` offset from JDK 12 on. API 26's java.time has Java 8
+    // semantics, so leaning on it parses fine under the JDK the unit tests run
+    // and returns null on a device — routine rows would vanish there only.
+    // This form also covers `Z`, so nothing that used to parse stops parsing.
+    runCatching { OffsetDateTime.parse(text).toEpochSecond().toDouble() }
+        .getOrNull()
+        ?.let { return it }
+    // Python's `datetime.isoformat()` on a naive datetime carries no zone at
+    // all. The device's zone is the only one on offer, and it is the same one
+    // [bucketOf] files rows by, so a stamp read here lands on the day it reads.
+    return runCatching {
+        LocalDateTime.parse(text).atZone(ZoneId.systemDefault()).toEpochSecond().toDouble()
+    }.getOrNull()
 }
 
 /** Cron `last_run_status` values that mean the run was fine. */
