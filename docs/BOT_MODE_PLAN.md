@@ -149,14 +149,36 @@ troca **dentro** do chat — a barra não o substitui, porque a barra não apare
   seria só uma segunda porta pro mesmo cômodo. `BotDmsScreen` **fica** no drawer como arquivo passivo (PM1).
 
 **Commit 2 — feed de Activity** (`ui/activity/`)
-- `ActivityItem.kt` — núcleo puro: `botActivity()` (fan-out de um bot → linhas), `routineActivity()`,
-  `mergeActivity()`, `bucketOf()` (Hoje/Ontem/Anteriores/Sem data, no fuso do **viewer**) e `parseTimestamp()`
-  (epoch numérico ou ISO-8601). 22 testes unitários.
+- `ActivityItem.kt` — núcleo puro: `activityTurns()` (página escaneada → turnos), `botActivity()` (fan-out de um
+  bot → linhas), `routineActivity()`, `mergeActivity()`, `bucketOf()` (Hoje/Ontem/Anteriores/Sem data, no fuso do
+  **viewer**) e `parseTimestamp()` (epoch numérico ou ISO-8601 com offset, com `Z` ou sem fuso nenhum).
+  29 testes unitários em `ActivityItemTest`.
 - `ActivityViewModel` — mesma forma de carga do roster e do Bot DMs: profiles + active em paralelo, scan por bot
   do chat canônico (`limit=20&role=user&order=latest`), **mais uma** chamada de cron. **2N+3 requests**, teto de
   12 bots concorrentes. `refreshOnChange(setOf(SESSIONS, CRON))` — um coletor só, um guard só.
 - **Política de falha:** só `getProfiles` é fatal. Bot que falha vai pra `unscannedBots`; cron que falha liga
   `routinesUnavailable`. Ambos aparecem como rodapé na tela — feed parcial que se declara bate tela de erro.
+
+**Commit 3 — fix round da auditoria pré-merge** (mesma branch, 4 achados)
+- **Chave duplicada = crash, não glitch.** `items(rows, key = { it.id })` lança em chave repetida, e os ids
+  eram `dm:$sessionId:$index` / `prompt:$sessionId` — iguais entre bots quando um gateway legado ignora
+  `?profile=` e devolve a MESMA sessão pra todos. Agora todo id é escopado por bot, e `mergeActivity()` fecha
+  com `distinctBy { it.id }`: o feed degrada, não morre.
+- **O feed mentia sobre troca de modelo.** `model_switch` / `personality_switch` / `auto_continue` viajam como
+  `role=user` (issue #904), então o scan os lia como prompt: linha falsa *"You messaged coder"* **e** expulsão
+  do prompt real (só o mais novo não-DM sobrevive). `activityTurns()` filtra `display_kind`, como o chat já faz
+  com os chips e `asBotDm()` com as entregas.
+- **Rodapé inalcançável.** O `EmptyState` é `fillMaxSize` dentro de uma `Column`: com o feed vazio ele comia a
+  tela e empurrava os avisos de degradação pra fora — todos os bots falhando renderizava *"Nothing yet"*,
+  contradizendo a política acima. Cada braço do `when` agora leva `weight(1f)`.
+- **Rotinas sumiam.** O gateway vivo manda `last_run_at = "2026-08-27T08:01:07.850223-03:00"` — ISO-8601 com
+  **offset**, não `Z`. `Instant.parse` só aceita offset a partir do JDK 12; o `java.time` da API 26 tem
+  semântica Java 8, então isso passava nos testes (JDK 21) e devolvia null **no device**. `parseTimestamp()`
+  agora tenta `OffsetDateTime` primeiro e cai pra `LocalDateTime` (isoformat sem fuso). Além disso, stamp
+  ilegível não descarta mais a linha: a execução aconteceu, então a linha fica **sem data** no fim do feed.
+  Só `last_run_at` ausente/vazio segue sem linha — aí a rotina de facto nunca rodou.
+- **Bônus (churn):** o id de DM usava o índice da janela de 20 turnos, então a mesma mensagem trocava de chave a
+  cada turno novo. Passa a usar o id de mensagem do gateway (issue #859), com fallback estável de `timestamp+seq`.
 
 ### 3.3 Desvios deliberados do mockup
 
@@ -180,15 +202,15 @@ Outros limites, declarados em vez de escondidos:
 
 ### 3.4 Validação
 
-Build verde (`compileDebugKotlin`, `compileDebugAndroidTestKotlin`), **1218 testes unitários** verdes, ktlint
-limpo. Instrumentados (`ActivityFeedListTest`, 4 casos com `now` fixo) compilam mas **não rodaram local** — não
+Build verde (`compileDebugKotlin`, `compileDebugAndroidTestKotlin`), **1229 testes unitários** verdes
+(`--rerun-tasks`, sem cache quente), ktlint limpo. Instrumentados (`ActivityFeedListTest`, 4 casos com `now` fixo) compilam mas **não rodaram local** — não
 há emulador nesta máquina; quem valida é o job `instrumented-tests` do CI.
 
 ### 3.5 Aberto / próximo
 
 - Abrir o PR e deixar o CI rodar os instrumentados.
-- **Não testado contra o gateway vivo** (100.101.230.70:9119) — o feed precisa de um smoke test com bots reais,
-  sobretudo o formato de `last_run_at` do cron, que `parseTimestamp()` cobre em duas formas mas não em todas.
+- **Feed ainda não exercitado ponta a ponta contra o gateway vivo** (100.101.230.70:9119). O formato real de
+  `last_run_at` do cron JÁ foi conferido por smoke test e está coberto por teste; falta o resto com bots reais.
 - Reavaliar `BotDmsScreen`: com o Activity agregando DMs, ele vira redundante. Fica no drawer como arquivo até
   o feed provar que cobre o caso.
 
