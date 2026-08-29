@@ -47,8 +47,10 @@ import com.m57.hermescontrol.data.local.AuthManager
 import com.m57.hermescontrol.data.ws.ConnectionStatus
 import com.m57.hermescontrol.data.ws.HermesWsClient
 import com.m57.hermescontrol.theme.LocalHermesStatusColors
+import com.m57.hermescontrol.ui.common.BottomNav
 import com.m57.hermescontrol.ui.common.DisableDrawerGestures
 import com.m57.hermescontrol.ui.common.DrawerGestureController
+import com.m57.hermescontrol.ui.common.HermesBottomBar
 import com.m57.hermescontrol.ui.common.LocalDrawerGestureController
 import com.m57.hermescontrol.ui.plugins.MemoryProviderDetailScreen
 import com.m57.hermescontrol.ui.settings.SettingsAboutPage
@@ -81,7 +83,7 @@ private fun appEntryProvider(
     entry<AuthLoginScreen> {
         AuthLoginScreenContent(
             onConnected = {
-                NavigationController.resetTo(ChatScreen)
+                NavigationController.resetTo(BotsScreen)
             },
             onBack = {
                 NavigationController.goBack()
@@ -282,6 +284,18 @@ fun MainNavigation(sessionId: String? = null) {
         ) {
             Scaffold(
                 contentWindowInsets = WindowInsets.navigationBars,
+                bottomBar = {
+                    // Hosted once, here, instead of per screen: HermesScaffold
+                    // stays untouched, and the bar can neither go missing on a
+                    // new screen nor double up on an old one. Scaffold hands the
+                    // bar's height to NavDisplay as bottom padding below.
+                    if (BottomNav.isVisibleOn(currentScreen)) {
+                        HermesBottomBar(
+                            currentScreen = currentScreen,
+                            onOpenMore = openDrawer,
+                        )
+                    }
+                },
             ) { paddingValues ->
                 NavDisplay(
                     backStack = backStack,

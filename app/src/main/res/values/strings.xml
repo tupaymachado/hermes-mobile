@@ -73,6 +73,11 @@
     <string name="nav_drawer_section_configure">Configure</string>
     <string name="nav_drawer_section_inspect">Inspect</string>
 
+    <!-- Bottom navigation tabs -->
+    <string name="nav_tab_bots">Bots</string>
+    <string name="nav_tab_activity">Activity</string>
+    <string name="nav_tab_more">More</string>
+
     <!-- Screen Names -->
     <string name="screen_chat">Chat</string>
     <string name="screen_skills">Skills</string>
@@ -1224,4 +1229,24 @@
     <string name="chat_tool_action_scheduled">Scheduled</string>
     <string name="chat_tool_action_detail">%1$s \u00b7 %2$s</string>
     <string name="chat_input_placeholder_bot">Message %1$s\u2026</string>
+
+    <!-- Activity feed (bottom-nav middle tab) -->
+    <string name="screen_activity">Activity</string>
+    <string name="activity_empty_title">Nothing yet</string>
+    <string name="activity_empty_desc">When your bots message each other or a routine runs, it shows up here.</string>
+    <string name="activity_section_today">Today</string>
+    <string name="activity_section_yesterday">Yesterday</string>
+    <string name="activity_section_earlier">Earlier</string>
+    <string name="activity_section_undated">No date</string>
+    <string name="activity_dm_line">%1$s messaged %2$s</string>
+    <string name="activity_prompt_line">You messaged %1$s</string>
+    <string name="activity_routine_ran">%1$s ran</string>
+    <string name="activity_routine_failed">%1$s failed</string>
+    <string name="activity_routine_desc">Routine</string>
+    <string name="activity_partial">Could not scan: %1$s</string>
+    <string name="activity_routines_unavailable">Routine runs unavailable</string>
+    <string name="activity_time_now">now</string>
+    <string name="activity_time_minutes">%1$dm</string>
+    <string name="activity_time_hours">%1$dh</string>
+    <string name="activity_time_days">%1$dd</string>
 </resources>

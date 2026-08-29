@@ -89,21 +89,35 @@ class NavigationControllerTest {
 
     @Test
     fun `navigateTo on the current primary screen clears the stack`() {
-        val backStack = NavBackStack<NavKey>(ChatScreen)
+        val backStack = NavBackStack<NavKey>(BotsScreen)
         NavigationController.backStack = backStack
 
         // Add a non-primary screen
         NavigationController.navigateTo(ProfilesScreen)
         assertEquals(2, backStack.size)
 
-        // Navigate to ChatScreen — it's a primary screen, so the stack gets
+        // Navigate to BotsScreen — it's a primary screen, so the stack gets
         // cleared before adding it. The dedup guard only fires when the key
-        // is already the LAST item (ChatScreen is at index 0, ProfilesScreen
+        // is already the LAST item (BotsScreen is at index 0, ProfilesScreen
         // is last), not when it's merely present somewhere in the stack.
-        NavigationController.navigateTo(ChatScreen)
+        NavigationController.navigateTo(BotsScreen)
 
         // Primary screen navigation clears the stack
         assertEquals("primary navigation clears stack", 1, backStack.size)
+        assertEquals(BotsScreen, backStack.lastOrNull())
+    }
+
+    @Test
+    fun `navigateTo chat stacks on the tab that opened it`() {
+        val backStack = NavBackStack<NavKey>(BotsScreen)
+        NavigationController.backStack = backStack
+
+        // Chat is a destination, not a tab: it must NOT clear the Bots home,
+        // or back from a bot's chat has nowhere to return to.
+        NavigationController.navigateTo(ChatScreen)
+
+        assertEquals(2, backStack.size)
+        assertEquals(BotsScreen, backStack.firstOrNull())
         assertEquals(ChatScreen, backStack.lastOrNull())
     }
 
@@ -187,14 +201,27 @@ class NavigationControllerTest {
     }
 
     @Test
-    fun `goBack from chat opens history`() {
+    fun `goBack from chat returns to the tab that opened it`() {
+        val backStack = NavBackStack<NavKey>(BotsScreen)
+        NavigationController.backStack = backStack
+        NavigationController.navigateTo(ChatScreen)
+
+        NavigationController.goBack()
+
+        assertEquals(1, backStack.size)
+        assertEquals(BotsScreen, backStack.lastOrNull())
+    }
+
+    @Test
+    fun `goBack from a root chat lands on the bots home`() {
+        // Chat is only ever the root on a cold start from a notification.
         val backStack = NavBackStack<NavKey>(ChatScreen)
         NavigationController.backStack = backStack
 
         NavigationController.goBack()
 
         assertEquals(1, backStack.size)
-        assertEquals(HistoryScreen, backStack.lastOrNull())
+        assertEquals(BotsScreen, backStack.lastOrNull())
     }
 
     @Test
@@ -205,7 +232,7 @@ class NavigationControllerTest {
         NavigationController.goBack()
 
         assertEquals(1, backStack.size)
-        assertEquals("default fallback should be ChatScreen", ChatScreen, backStack.lastOrNull())
+        assertEquals("default fallback should be BotsScreen", BotsScreen, backStack.lastOrNull())
     }
 
     @Test
@@ -231,7 +258,8 @@ class NavigationControllerTest {
 
     @Test
     fun `isPrimaryScreen returns true for default screens`() {
-        assertTrue("ChatScreen should be primary by default", NavigationController.isPrimaryScreen(ChatScreen))
+        assertTrue("BotsScreen should be primary by default", NavigationController.isPrimaryScreen(BotsScreen))
+        assertTrue("ActivityScreen should be primary by default", NavigationController.isPrimaryScreen(ActivityScreen))
         assertTrue("SkillsScreen should be primary by default", NavigationController.isPrimaryScreen(SkillsScreen))
         assertTrue("CronJobsScreen should be primary by default", NavigationController.isPrimaryScreen(CronJobsScreen))
         assertTrue("SystemScreen should be primary by default", NavigationController.isPrimaryScreen(SystemScreen))
@@ -240,6 +268,8 @@ class NavigationControllerTest {
 
     @Test
     fun `isPrimaryScreen returns false for non-default screens`() {
+        // Chat is a destination reached from a bot, not a tab (bottom-nav shell).
+        assertFalse("ChatScreen should NOT be primary", NavigationController.isPrimaryScreen(ChatScreen))
         assertFalse("ProfilesScreen should NOT be primary", NavigationController.isPrimaryScreen(ProfilesScreen))
         assertFalse("LogsScreen should NOT be primary", NavigationController.isPrimaryScreen(LogsScreen))
         assertFalse("ConfigScreen should NOT be primary", NavigationController.isPrimaryScreen(ConfigScreen))
