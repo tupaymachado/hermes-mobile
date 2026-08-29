@@ -1,6 +1,7 @@
 package com.m57.hermescontrol.data.config
 
 import com.m57.hermescontrol.data.model.PinnedModel
+import com.m57.hermescontrol.data.session.GroupRoom
 import com.m57.hermescontrol.theme.ThemePreference
 import com.m57.hermescontrol.theme.ThemePreset
 import kotlinx.serialization.Serializable
@@ -37,4 +38,9 @@ data class ServerStoreState(
     // thread instead of creating a new one. Optional with a default, so older
     // stores deserialize unchanged (ignoreUnknownKeys, no migration needed).
     val botChatSessions: Map<String, String> = emptyMap(),
+    // Bot Mode P3: group rooms. The 1:N widening of botChatSessions above —
+    // each room keeps its own per-member thread map, so a bot in three rooms
+    // holds three threads plus its 1:1 chat, independently. Additive with a
+    // default, so older stores deserialize unchanged (no migration).
+    val groupRooms: List<GroupRoom> = emptyList(),
 )
