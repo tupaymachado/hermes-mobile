@@ -65,6 +65,8 @@ import com.m57.hermescontrol.data.model.Attachment
 import com.m57.hermescontrol.data.ws.CommandBlocklist
 import com.m57.hermescontrol.data.ws.CommandCatalog
 import com.m57.hermescontrol.ui.chat.ChatInputPolicy
+import com.m57.hermescontrol.ui.chat.MentionBot
+import com.m57.hermescontrol.ui.chat.MentionPolicy
 
 /**
  * The chat input bar with a two-row layout: input+send on top,
@@ -81,6 +83,10 @@ fun ChatInputBar(
     isConnected: Boolean,
     commandCatalog: CommandCatalog,
     slashUsageCounts: Map<String, Int> = emptyMap(),
+    // Bots offerable to @mention autocomplete (§P4). Empty = no roster
+    // loaded (or it failed): the dropdown simply never opens and an '@'
+    // stays plain text.
+    mentionBots: List<MentionBot> = emptyList(),
     pendingAttachments: List<Attachment> = emptyList(),
     onCameraTap: () -> Unit = {},
     onImageTap: () -> Unit = {},
@@ -174,6 +180,71 @@ fun ChatInputBar(
                                         onClick = { onInputChange(ChatInputPolicy.commandFieldValue(cmd)) },
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // @mention autocomplete (§P4). Unlike the slash menu above it
+                // keys off the CARET, not the start of the text: a mention can
+                // be typed or edited anywhere in the message.
+                val mentionQuery = MentionPolicy.queryAt(inputFieldValue)
+                val mentionHits =
+                    if (mentionQuery == null || mentionBots.isEmpty()) {
+                        emptyList()
+                    } else {
+                        MentionPolicy.suggestions(mentionQuery.prefix, mentionBots.map { it.name })
+                    }
+                AnimatedVisibility(
+                    visible = mentionHits.isNotEmpty(),
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    androidx.compose.material3.Surface(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .testTag("mention_suggestions"),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border =
+                            BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            ),
+                    ) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+                            items(mentionHits, key = { it }) { name ->
+                                val description = mentionBots.firstOrNull { it.name == name }?.description
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                "@$name",
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                            if (description != null) {
+                                                Text(
+                                                    description,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    // Non-null by construction: hits are empty
+                                    // when the query is null, so the row cannot
+                                    // exist without one.
+                                    onClick = {
+                                        mentionQuery?.let {
+                                            onInputChange(MentionPolicy.apply(inputFieldValue, it, name))
+                                        }
+                                    },
+                                )
                             }
                         }
                     }

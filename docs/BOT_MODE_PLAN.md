@@ -46,6 +46,7 @@ Numeradas, testáveis. Violação = bug, não escolha de estilo.
 - **D8** Navegação = bottom nav de 3 abas (Bots · Activity · More). **More ! é destino** (`key = null`) → abre o drawer raiz, e as ~24 telas ficam onde estavam. Barra hospedada **uma vez** pelo `Scaffold` do `MainNavigation` ∴ `HermesScaffold` intocado, barra não some nem duplica. **Chat = destino, ! aba**: saiu de `primaryScreens`, empilha sobre a aba que o abriu, back devolve essa aba. `BotsScreen`/`ActivityScreen` saíram do drawer (`drawerSection = null`): são abas, entrada duplicada seria 2ª porta pro mesmo cômodo. `BottomNav.isVisibleOn`/`selectedOn` são puras; drill-downs caem fora por não estarem em `ScreenRegistry.ALL_SCREENS` ∴ a regra não apodrece quando nascer a próxima sub-página.
 - **D9** Activity tem **3 kinds só** — `BOT_DM` (prefixo `Message from 🤖 X (@x):`), `USER_PROMPT` (turno user mais novo que ! é DM), `ROUTINE_RUN` (`last_run_at`/`last_run_status`). O mockup pedia "finished a task" / "flagged an anomaly": **recusado**, exigiria inferir intenção do texto e erra com confiança no primeiro bot sarcástico.
 - **D10** Política de falha do Activity: só `getProfiles` é fatal. Bot que falha → `unscannedBots`; cron que falha → `routinesUnavailable`; ambos viram rodapé visível (§V6).
+- **D12** @mention (§P4) mora em `MentionPolicy` (puro) + `MentionViewModel` (uma `GET /api/profiles`, sem o fan-out 2N+1 do roster) — **não** em `ChatViewModel` (§V10) nem no `BotsViewModel`. O gatilho é o **caret**, ! o início do texto como no menu de slash: uma menção pode ser escrita ou editada em qualquer ponto da mensagem. O `@` tem de ABRIR palavra ∴ `tupay@gmail.com` nunca abre lista. Roster que não carrega = sem sugestões e o `@` segue texto puro — autocomplete é acelerador, ! pode barrar o envio.
 - **D11** `ServerEndpoint.DEFAULT_BASE_URL = http://100.101.230.70:9119/` (Tailscale, HTTP puro dentro do túnel). O default upstream `https://127.0.0.1:9119/` só serve gateway on-device.
 
 ---
@@ -74,6 +75,8 @@ Declarados, não escondidos — cada um é uma escolha de custo, não um esqueci
 | S6 | x | PM2 A/B/D — `ToolActionCard` (§L4), composer contextual, avatar saturado + ring (§V5) | `feat/bot-mode-visual-polish` · PR #7 |
 | S7 | x | `BotsScreen` vira start destination; `ProfilesScreen` sai de CONVERSE | PR #8 |
 | S8 | x | PM7 — bottom nav (`ui/common/HermesBottomBar.kt`) + feed de Activity (`ui/activity/`) (§D8 §D9 §D10 §L1-L3) | `feat/bottom-nav-bot-mode` · PR #9 |
+
+| S9 | x | P4 — @mention autocomplete no composer (§D12) | `feat/mention-autocomplete` |
 
 **Validação de S8 (CI verde, 29/ago/2026):** unit, **instrumentados**, ktlint, Android Lint, release-compile, CodeQL.
 
@@ -110,13 +113,13 @@ Log de backprop: cada linha é um bug + a invariante que impede a recorrência.
 | id | status | o quê | custo |
 |---|---|---|---|
 | P7 | x | Bottom nav + feed de Activity | mergeado (PR #9) |
-| P4 | . | @mention autocomplete no composer: autocomplete sobre o roster (nomes + títulos), insere token `@nome`, sem resolução cross-device no 1º corte. Composer já é contextual (S6) ∴ encaixa direto | 1-2d |
+| P4 | x | @mention autocomplete no composer (§D12, §S9). 1º corte: nomes + descrições do roster, insere `@nome `, sem resolução cross-device | feito |
 | P3 | . | Group chats 2-6 bots: sala partilhada, ≤3 rodadas seriais, @menções escopam quem responde, `@user` escala pra ti (badge "needs you"), caps 10 msgs/send, sessão `Group: <nome>` por bot. Falta: modelo de room (1:N de §D1), `GroupRoomCoordinator`, `GroupRoomScreen` + VM | 2-3 sem · fatiável a→b→c→d |
 | P5 | - | Multi-source roster (bots de outros gateways, handles `@name-device`) — adiado até existir 2º gateway | — |
 | P6 | - | Avatares por IA (`image.generate`) — backend sem campo de avatar, exigiria mudança server-side; cosmético | — |
 | PE | ✗ | Drawer lateral swipeable — **cancelado** por §D8: o bottom nav elimina a disputa de gesto em vez de arbitrá-la. O `BotSwitcherSheet` (S3) segue sendo a troca rápida **dentro** do chat, onde a barra não aparece | — |
 
-**Ordem:** P4 → P3. P4 depende de contexto onde mencionar (S5/P3). P3 é o único grande e é fatiável.
+**Ordem:** P3 é o que resta com trabalho desenhado — o único grande, fatiável a→b→c→d.
 
 ---
 

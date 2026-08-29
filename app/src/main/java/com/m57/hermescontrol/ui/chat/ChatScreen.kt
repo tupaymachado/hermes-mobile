@@ -410,6 +410,12 @@ fun ChatScreen(
             }
         }
 
+    // @mention roster (§P4). Its own tiny ViewModel: one GET /api/profiles,
+    // no roster fan-out, and nothing added to ChatViewModel (§V10).
+    val mentionViewModel: MentionViewModel = viewModel { MentionViewModel() }
+    val mentionBots by mentionViewModel.bots.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { mentionViewModel.load() }
+
     // Lifecycle effects, permissions, session switching, auto-scroll, errors
     ChatLifecycleEffects(
         sessionId = sessionId,
@@ -740,6 +746,7 @@ fun ChatScreen(
             ChatInputBar(
                 inputFieldValue = inputFieldValue,
                 onInputChange = { inputFieldValue = it },
+                mentionBots = mentionBots,
                 onSend = {
                     viewModel.sendMessage(inputFieldValue.text)
                     inputFieldValue = TextFieldValue("")
