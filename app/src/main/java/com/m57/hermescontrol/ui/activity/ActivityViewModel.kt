@@ -9,7 +9,9 @@ import com.m57.hermescontrol.data.model.ProfileInfo
 import com.m57.hermescontrol.data.remote.ApiClient
 import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.safeApiCall
+import com.m57.hermescontrol.data.session.CONVERSATION_PROBE_LIMIT
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
+import com.m57.hermescontrol.data.session.newestConversation
 import com.m57.hermescontrol.data.ws.ChangeEvents
 import com.m57.hermescontrol.ui.common.ToastHost
 import com.m57.hermescontrol.ui.common.refreshOnChange
@@ -214,14 +216,21 @@ class ActivityViewModel(
     private suspend fun ProfileInfo.scan(): BotScan {
         val sessionsResult =
             safeApiCall {
-                ApiClient.hermesApi.getSessions(limit = 1, offset = 0, order = "recent", profile = name)
+                ApiClient.hermesApi.getSessions(
+                    limit = CONVERSATION_PROBE_LIMIT,
+                    offset = 0,
+                    order = "recent",
+                    profile = name,
+                )
             }
         if (sessionsResult !is NetworkResult.Success) {
             return BotScan(name = name, items = emptyList(), failed = true)
         }
-        // No session is not a failure — the bot simply has nothing yet.
+        // No session is not a failure — the bot simply has nothing yet. Cron
+        // runs are skipped here: their injected preamble is a user turn that
+        // the user never typed (see [newestConversation]).
         val session =
-            sessionsResult.data.sessions?.firstOrNull()
+            sessionsResult.data.sessions.newestConversation()
                 ?: return BotScan(name = name, items = emptyList(), failed = false)
 
         val messagesResult =
