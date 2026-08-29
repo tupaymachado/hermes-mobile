@@ -17,6 +17,7 @@ import com.m57.hermescontrol.data.remote.CleartextPolicy
 import com.m57.hermescontrol.data.remote.CookieManager
 import com.m57.hermescontrol.data.remote.ServerEndpoint
 import com.m57.hermescontrol.data.session.ActiveSessionHolder
+import com.m57.hermescontrol.data.session.GroupRoom
 import com.m57.hermescontrol.theme.ThemePreference
 import com.m57.hermescontrol.theme.ThemePreset
 import kotlinx.coroutines.CoroutineScope
@@ -688,6 +689,65 @@ object AuthManager {
             } else {
                 state.copy(botChatSessions = state.botChatSessions - profile)
             }
+        }
+    }
+
+    // ── Group rooms (P3) ─────────────────────────────────────────────────
+    // The 1:N widening of the bot-chat map above: same durable "bot → thread"
+    // idea, kept per room so a bot's rooms and its 1:1 chat never collide.
+
+    fun getGroupRooms(): List<GroupRoom> = serverStore.getLatestState().groupRooms
+
+    fun getGroupRoom(roomId: String): GroupRoom? = getGroupRooms().firstOrNull { it.id == roomId }
+
+    /** Creates or replaces [room], matched by id. */
+    fun upsertGroupRoom(room: GroupRoom) {
+        if (room.id.isBlank()) return
+        serverStore.update { state ->
+            val without = state.groupRooms.filterNot { it.id == room.id }
+            state.copy(groupRooms = without + room)
+        }
+    }
+
+    fun deleteGroupRoom(roomId: String) {
+        serverStore.update { state ->
+            state.copy(groupRooms = state.groupRooms.filterNot { it.id == roomId })
+        }
+    }
+
+    /** The thread [member] keeps for [roomId], or null before one is adopted. */
+    fun getGroupSessionId(
+        roomId: String,
+        member: String,
+    ): String? = getGroupRoom(roomId)?.sessions?.get(member)?.takeIf { it.isNotBlank() }
+
+    /** Adopts [sessionId] as [member]'s thread in [roomId]. */
+    fun setGroupSessionId(
+        roomId: String,
+        member: String,
+        sessionId: String,
+    ) {
+        if (roomId.isBlank() || member.isBlank() || sessionId.isBlank()) return
+        updateRoom(roomId) { room -> room.copy(sessions = room.sessions + (member to sessionId)) }
+    }
+
+    /** Forgets [member]'s thread in [roomId] (self-heal, as for the 1:1 chat). */
+    fun clearGroupSession(
+        roomId: String,
+        member: String,
+    ) {
+        updateRoom(roomId) { room ->
+            if (!room.sessions.containsKey(member)) room else room.copy(sessions = room.sessions - member)
+        }
+    }
+
+    private fun updateRoom(
+        roomId: String,
+        transform: (GroupRoom) -> GroupRoom,
+    ) {
+        serverStore.update { state ->
+            val room = state.groupRooms.firstOrNull { it.id == roomId } ?: return@update state
+            state.copy(groupRooms = state.groupRooms.map { if (it.id == roomId) transform(room) else it })
         }
     }
 }
