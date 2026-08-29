@@ -15,6 +15,7 @@ import com.m57.hermescontrol.data.remote.HermesApiService
 import com.m57.hermescontrol.data.remote.NetworkError
 import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.session.BotChatRegistry
+import com.m57.hermescontrol.data.session.CONVERSATION_PROBE_LIMIT
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
 import com.m57.hermescontrol.data.ws.HermesWsClient
 import io.mockk.coEvery
@@ -198,8 +199,8 @@ class BotsViewModelTest {
 
         // Explicit profile= is what lets the roster read another bot WITHOUT
         // flipping the active profile (ProfileScopeInterceptor honours it).
-        coVerify { mockApi.getSessions(1, 0, "recent", "default") }
-        coVerify { mockApi.getSessions(1, 0, "recent", "research") }
+        coVerify { mockApi.getSessions(CONVERSATION_PROBE_LIMIT, 0, "recent", "default") }
+        coVerify { mockApi.getSessions(CONVERSATION_PROBE_LIMIT, 0, "recent", "research") }
         coVerify(exactly = 0) { ProfileSwitchCoordinator.switchProfile(any(), any(), any()) }
     }
 
@@ -213,7 +214,11 @@ class BotsViewModelTest {
         coVerify {
             mockApi.getSessionMessages(
                 sessionId = "sess-1",
-                limit = 1,
+                // NOT 1: the newest role=user row can be a timeline marker
+                // (model_switch, …) that rides on that role without being the
+                // user talking (#904), so one row is not enough to find the
+                // real last message.
+                limit = match { it != null && it > 1 },
                 offset = any(),
                 order = "latest",
                 includeCompacted = any(),

@@ -30,6 +30,7 @@ Numeradas, testáveis. Violação = bug, não escolha de estilo.
 - **V9** Chave de linha de lista ! pode repetir — `items(key=)` **lança**. Ids escopados por bot + `distinctBy` no merge.
 - **V10** `ChatViewModel` = ponto quente (3.4k linhas, máquina de generations/resume). Mudança pendura em caminho existente; refactor de resume fica fora de escopo.
 - **V11** Toda string nova nasce em `en` + `ko` + `zh`.
+- **V12** Sessão de origem MÁQUINA ! é conversa. Cada execução de cron abre a sua própria sessão (`cron_<job>_<stamp>`, `source = "cron"`) cujo 1º turno user é o preâmbulo injetado `[IMPORTANT: You are running as a scheduled task…]` ∴ toda varredura por bot escolhe a sessão via `newestConversation()`, nunca `firstOrNull()`. Mesma família de V8: turno que é *tecnicamente* `role=user` sem ser o utilizador a falar.
 
 ---
 
@@ -38,7 +39,7 @@ Numeradas, testáveis. Violação = bug, não escolha de estilo.
 - **D1** `BotChatRegistry` — objeto puro (sem Compose/Android). Resolução: mapa local → sessão `pinned` → `null` → `adopt()` + `flushPendingPin()`. `invalidate()` = self-heal sobre `ActiveSessionHolder`/`recoverGoneSession` (4007/404) — `recoverGoneSession` só **invalida**, ! re-adota. Mapa 1:1 que generaliza pra 1:N (§P3) sem migração destrutiva.
 - **D2** Persistência em `ServerStoreState.botChatSessions: Map<String,String>` — `ignoreUnknownKeys` ∴ sem migração.
 - **D3** Touchpoint do chat canônico = `ChatViewModel`, collector de `switched` → `resetSessionState(null)` → `handleGatewayReady()` (usa `initialSessionId` se `currentSessionId == null`, senão `createNewSession()`) — o caminho "abrir sessão específica após ready" já existia pras notificações. Handoff = `consumePendingBotSession()` → `PendingBotChat(profile, sessionId?)`, carrega **profile + sessionId**, ! só o sessionId: sem o profile, "abrir bot pela 1ª vez" não consegue adotar. `switchProfile(isBotContext)` separa switch normal de switch-de-roster; switch normal **limpa** handoff armado (não ignora).
-- **D4** Fan-out (roster, Bot DMs, Activity): profiles + active em paralelo, depois por bot a sessão mais nova (`getSessions(limit=1, order=recent, profile=<bot>)`) + uma página de turnos (`limit=20&role=user&order=latest`). **2N+1** (Activity: 2N+3, +cron), teto **12** concorrentes. `O(bots)`, ! `O(sessions)` — é o que torna a tela pagável.
+- **D4** Fan-out (roster, Bot DMs, Activity): profiles + active em paralelo, depois por bot a sessão mais nova **que seja conversa** (`getSessions(limit=CONVERSATION_PROBE_LIMIT, order=recent, profile=<bot>)` → `newestConversation()`, §V12) + uma página de turnos (`limit=20&role=user&order=latest`). **2N+1** (Activity: 2N+3, +cron), teto **12** concorrentes. `O(bots)`, ! `O(sessions)` — é o que torna a tela pagável.
 - **D5** Refresh por `refreshOnChange`. Roster = **duas** assinaturas (`sessions.changed` last-message · `gateway.changed` presence) com guard separado; Activity = **um** coletor sobre `{SESSIONS, CRON}`. Backend que emite só um subconjunto degrada pra ele; nenhum → pull-to-refresh.
 - **D6** `BotSwitcherSheet` usa VM de escopo **Activity**: o switch sobrevive ao dismiss. VM de sheet seria cancelada mid-switch → servidor flipado e app não re-homed, exatamente o split-brain que V1 existe pra evitar. `selectBot(onSwitched)` só dispara depois do servidor aceitar ∴ falha mantém a sheet aberta com o toast, e tocar no bot já ativo reporta em vez de fechar num no-op.
 - **D7** Avatar = monograma determinístico, 4 slots do `colorScheme` (guard `checkColorLiterals`). Backend não expõe campo de avatar (§P6).
@@ -88,6 +89,8 @@ Log de backprop: cada linha é um bug + a invariante que impede a recorrência.
 | B2 | 27/ago | markers em `role=user` lidos como prompt → linha falsa "You messaged X" **e** expulsão do prompt real (só o mais novo não-DM sobrevive) | `activityTurns()` filtra `display_kind` | V8 |
 | B3 | 27/ago | `EmptyState` é `fillMaxSize` dentro da `Column` → comia a tela e empurrava o rodapé de degradação pra fora; todos os bots falhando renderizava "Nothing yet" | `weight(1f)` em cada braço do `when` | V6 |
 | B4 | 27/ago | `last_run_at` vem ISO-8601 com **offset** (`-03:00`); `Instant.parse` só aceita offset ≥ JDK 12 e o `java.time` da API 26 tem semântica Java 8 → passava no teste (JDK 21) e devolvia null **no device** | `OffsetDateTime` → fallback `LocalDateTime`; stamp ilegível vira linha **sem data**, não linha descartada | — |
+| B6 | 29/ago | Varredura por bot pegava `sessions.firstOrNull()` com `limit=1` → no gateway vivo as 2 sessões mais recentes eram execuções de cron ∴ feed renderizava **"You messaged default"** sobre o preâmbulo injetado, roster mostrava-o como última mensagem, e a mesma execução aparecia 2× (uma verdadeira como `ROUTINE_RUN`, uma falsa como prompt) | `newestConversation()` partilhado pelas 3 varreduras (roster, Bot DMs, Activity) | V12 |
+| B7 | 29/ago | Roster pedia `limit=1` de `role=user` **sem** filtrar `display_kind` → trocar o modelo de um bot fazia a linha dele ler "Switched model to opus". O Activity já filtrava (B2); o roster não | `MARKER_PROBE_LIMIT` turnos + `lastOrNull { display_kind.isNullOrBlank() }` | V8 |
 | B5 | 27/ago | id de DM usava o índice da janela → a mesma mensagem trocava de chave a cada turno novo (churn de keys) | id de mensagem do gateway (#859), fallback estável `timestamp+seq` | V9 |
 
 ---
@@ -96,7 +99,8 @@ Log de backprop: cada linha é um bug + a invariante que impede a recorrência.
 
 - **R1** Pin durável colide com o pin manual do utilizador (`SessionsScreen.togglePin`). Despinar o canonical perde só o *fallback* cross-device — o mapa local segue (§D1). Aceitável; vale um aviso no `SessionsScreen`.
 - **R2** 2N+3 por carga do Activity, e roster/DMs/Activity podem recarregar juntos num burst de `sessions.changed`. OK pra N < ~15; acima disso, cache partilhado do scan por bot.
-- **R3** Feed ainda ! exercitado ponta a ponta contra o gateway vivo. O formato de `last_run_at` já foi conferido por smoke test (§B4); falta o resto com bots reais.
+- **R3** ✅ **Exercitado contra o gateway vivo em 29/ago/2026** (via CLI oficial — a API HTTP exige credencial que a sessão não tinha). Conferidos: 3 bots reais (`default` running · `coder`/`secretaria` stopped) ∴ N=3 e 2N+3=9 requests por carga; `last_run_at = 2026-08-29T08:02:20.196986-03:00` (offset, µs, sem `Z`) exatamente como §B4 previu; `last_run_status = ok`; marcador `pinned` existe. **Achou B6 e B7.** Falta ainda: percorrer a UI real num device, e o caminho HTTP com token (ver §R5).
+- **R5** O teste de regressão do §B4 vive em `app/src/test` (JVM/JDK 21) — a mesma camada que deixou o B4 passar. `OffsetDateTime.parse` aceita offset desde o Java 8 ∴ o fix está certo por construção, mas **nenhuma camada de teste aqui roda a semântica de `java.time` da API 26**. Guard durável seria um check de CI proibindo `Instant.parse` sobre stamps do gateway.
 - **R4** `BotDmsScreen` ficou redundante com o Activity. Segue no drawer como arquivo passivo até o feed provar que cobre o caso.
 
 ---

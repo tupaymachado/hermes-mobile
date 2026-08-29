@@ -10,7 +10,9 @@ import com.m57.hermescontrol.data.remote.NetworkResult
 import com.m57.hermescontrol.data.remote.safeApiCall
 import com.m57.hermescontrol.data.session.BotChatRegistry
 import com.m57.hermescontrol.data.session.BotDmAttribution
+import com.m57.hermescontrol.data.session.CONVERSATION_PROBE_LIMIT
 import com.m57.hermescontrol.data.session.ProfileSwitchCoordinator
+import com.m57.hermescontrol.data.session.newestConversation
 import com.m57.hermescontrol.data.ws.ChangeEvents
 import com.m57.hermescontrol.ui.common.ToastHost
 import com.m57.hermescontrol.ui.common.refreshOnChange
@@ -220,20 +222,33 @@ class BotsViewModel(
         // active profile (ProfileScopeInterceptor leaves an explicit param alone).
         val sessionsResult =
             safeApiCall {
-                ApiClient.hermesApi.getSessions(limit = 1, offset = 0, order = "recent", profile = name)
+                ApiClient.hermesApi.getSessions(
+                    limit = CONVERSATION_PROBE_LIMIT,
+                    offset = 0,
+                    order = "recent",
+                    profile = name,
+                )
             }
         // Failure and "no sessions" both land on a null last message, but they
         // are NOT the same fact: only the first is a degraded row (Fase 4).
         if (sessionsResult !is NetworkResult.Success) {
             return base.copy(lastMessageUnavailable = true)
         }
-        val session = sessionsResult.data.sessions?.firstOrNull() ?: return base
+        // Cron runs are not conversations: their injected preamble is a user
+        // turn nobody typed, and showing it as the bot's last message is a
+        // lie the live gateway tells daily (see [newestConversation]).
+        val session = sessionsResult.data.sessions.newestConversation() ?: return base
 
         val messagesResult =
             safeApiCall {
                 ApiClient.hermesApi.getSessionMessages(
                     sessionId = session.id,
-                    limit = 1,
+                    // More than one turn because the newest can be a timeline
+                    // MARKER (model_switch, …), which rides on role=user
+                    // (#904) without being the user talking. Asking for one
+                    // row and taking it renders "Switched model to opus" as
+                    // the bot's last message.
+                    limit = MARKER_PROBE_LIMIT,
                     // order=latest pages back from the NEWEST message; without
                     // it a legacy backend returns the oldest, which is the same
                     // thing SessionInfo.preview already holds.
@@ -245,11 +260,13 @@ class BotsViewModel(
         // `oneLine()` would fold a multi-line delivery into text it no longer
         // recognises. PM1's roster badge is pure derivation over the last
         // message the fan-out ALREADY fetched — no extra request.
+        // Page comes back chronologically ∴ the newest real turn is the LAST
+        // one that is not a marker.
         val rawLastMessage =
             (messagesResult as? NetworkResult.Success)
                 ?.data
                 ?.messages
-                ?.lastOrNull()
+                ?.lastOrNull { it.display_kind.isNullOrBlank() }
                 ?.content
                 ?.flatText()
         val dm = rawLastMessage?.let { BotDmAttribution.parse(it) }
@@ -274,6 +291,9 @@ class BotsViewModel(
     companion object {
         /** Concurrent per-bot lookups; keeps the fan-out off the connection pool's back. */
         private const val ROSTER_FAN_OUT_LIMIT = 12
+
+        /** Turns fetched so a run of markers cannot hide the real last message. */
+        private const val MARKER_PROBE_LIMIT = 5
     }
 }
 
